@@ -1,0 +1,32 @@
+[package]
+name = "bmx_rs"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+autobins = false
+default-run = "bmx"
+
+[[bin]]
+name = "bmx"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", default-features = false, features = [
+    "std",
+    "help",
+    "usage",
+    "error-context",
+    "derive",
+] }
+semver = "1"
+serde = { version = "1", features = ["derive"] }
+# 0.5 uses serde only; 0.8+ pulls toml_edit + winnow + indexmap (large lockfile).
+toml = "0.5"
+
+[dev-dependencies]
+tempfile = "3"
+assert_cmd = "2"
+predicates = "3"
+temp-env = "0.3"
+serial_test = "3"
