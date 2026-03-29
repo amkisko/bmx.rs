@@ -12,7 +12,14 @@ use tempfile::TempDir;
 fn run_git(repo: &Path, args: &[&str]) {
     let status = Command::new("git")
         .current_dir(repo)
-        .args(["-c", "commit.gpgsign=false"])
+        .args([
+            "-c",
+            "commit.gpgsign=false",
+            "-c",
+            "user.email=test@example.com",
+            "-c",
+            "user.name=BMX Test",
+        ])
         .args(args)
         .status()
         .expect("git command should run");
