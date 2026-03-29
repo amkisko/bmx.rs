@@ -21,6 +21,7 @@ mod runtime;
 mod search;
 mod shim;
 mod source;
+mod trust;
 mod types;
 mod workspace;
 

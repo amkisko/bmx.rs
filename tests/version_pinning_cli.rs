@@ -54,11 +54,12 @@ fn init_make_repo(root: &Path, repo_name: &str, bin_name: &str, msg: &str) -> Pa
 fn bmx(home: &Path) -> Command {
     let mut cmd = Command::cargo_bin("bmx").expect("binary should build");
     cmd.env("HOME", home);
+    cmd.env("BMX_TRUST_ASSUME_YES", "1");
     cmd
 }
 
 #[test]
-fn install_and_exec_support_semver_and_commit_sha_pinning() {
+fn exec_with_ref_is_one_off_unless_pin_flag_is_set() {
     let home = TempDir::new().expect("home tempdir");
     let repos = TempDir::new().expect("repos tempdir");
 
@@ -87,6 +88,18 @@ fn install_and_exec_support_semver_and_commit_sha_pinning() {
 
     let install_meta = home.path().join(".bmx/apps/pin-tool/install.toml");
     let content = fs::read_to_string(install_meta).expect("metadata");
-    assert!(content.contains("requested_ref"));
+    assert!(!content.contains("requested_ref"));
     assert!(content.contains("resolved_commit"));
+
+    let project = TempDir::new().expect("project");
+    bmx(home.path())
+        .current_dir(project.path())
+        .args(["exec", "--pin", &format!("{app}@^1.0")])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("V2"));
+
+    let pinned_content = fs::read_to_string(home.path().join(".bmx/apps/pin-tool/install.toml"))
+        .expect("metadata after --pin");
+    assert!(pinned_content.contains("requested_ref"));
 }

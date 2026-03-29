@@ -3,14 +3,14 @@ use std::path::Path;
 use anyhow::{Result, bail};
 
 use crate::cli::{
-    CheckoutCommands, Cli, Commands, IsolationCommands, ShimCommands, SourceCommands,
+    CheckoutCommands, Cli, Commands, IsolationCommands, ShimCommands, SourceCommands, TrustCommands,
 };
 use crate::config::{load_config, save_config};
 use crate::history::{list_recent_audit, undo, undo_one_app};
 use crate::layout::resolve_installed_layout;
 use crate::ops::{
-    doctor, install_app, reinstall_app, run_app, self_update, show_package, uninstall_app,
-    update_all,
+    doctor, install_app, rebuild_app, reinstall_app, run_app, self_update, show_package,
+    uninstall_app, update_all,
 };
 use crate::source::normalize_source_base;
 use crate::types::{BuildIsolation, CheckoutBackend};
@@ -35,11 +35,52 @@ pub(crate) fn dispatch(cli: Cli, home: &Path) -> Result<()> {
                     )
                 })?
             };
-            run_app(home, &spec, &args, cli.verbose)
+            run_app(home, &spec, &args, cli.verbose, cli.pin)
         }
         Some(Commands::Install { app, install_as }) => {
-            install_app(home, &app, install_as.as_deref(), cli.verbose, record)?;
+            install_app(
+                home,
+                &app,
+                install_as.as_deref(),
+                cli.verbose,
+                record,
+                cli.pin,
+                cli.trust,
+            )?;
             println!("installed {app}");
+            Ok(())
+        }
+        Some(Commands::Rebuild { install, app }) => {
+            let cwd = std::env::current_dir()?;
+            let spec = if cli.pin {
+                match app.as_deref() {
+                    Some(a) => {
+                        crate::pin::upsert_pin_in_dir(&cwd, a)?;
+                        a.to_string()
+                    }
+                    None => crate::pin::resolve_implicit_pin_spec(&cwd)?,
+                }
+            } else {
+                app.ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "`bmx rebuild` requires APP, or use --pin with `.bmx/pins.toml` / `.bmx/pin`"
+                    )
+                })?
+            };
+            rebuild_app(
+                home,
+                &spec,
+                install,
+                cli.verbose,
+                record,
+                cli.pin,
+                cli.trust,
+            )?;
+            if install {
+                println!("rebuilt and installed {spec}");
+            } else {
+                println!("rebuilt {spec}");
+            }
             Ok(())
         }
         Some(Commands::Uninstall { app }) => {
@@ -48,24 +89,32 @@ pub(crate) fn dispatch(cli: Cli, home: &Path) -> Result<()> {
             Ok(())
         }
         Some(Commands::Reinstall { app }) => {
-            reinstall_app(home, &app, cli.verbose, record)?;
+            reinstall_app(home, &app, cli.verbose, record, cli.trust)?;
             println!("reinstalled {app}");
             Ok(())
         }
         Some(Commands::SelfUpdate { app }) => {
-            self_update(home, &app, cli.verbose, record)?;
+            self_update(home, &app, cli.verbose, record, cli.trust)?;
             println!("self-updated {app}");
             Ok(())
         }
         Some(Commands::Update { app }) => match app {
             Some(app_name) => {
                 resolve_installed_layout(home, &app_name)?;
-                install_app(home, &app_name, None, cli.verbose, record)?;
+                install_app(
+                    home,
+                    &app_name,
+                    None,
+                    cli.verbose,
+                    record,
+                    cli.pin,
+                    cli.trust,
+                )?;
                 println!("updated {app_name}");
                 Ok(())
             }
             None => {
-                update_all(home, cli.verbose, record)?;
+                update_all(home, cli.verbose, record, cli.trust)?;
                 println!("updated installed apps");
                 Ok(())
             }
@@ -73,17 +122,17 @@ pub(crate) fn dispatch(cli: Cli, home: &Path) -> Result<()> {
         Some(Commands::Source { command }) => dispatch_source(home, command),
         Some(Commands::Isolation { command }) => dispatch_isolation(home, command),
         Some(Commands::Checkout { command }) => dispatch_checkout(home, command),
+        Some(Commands::Trust { command }) => dispatch_trust(home, command),
         Some(Commands::Shim { command }) => {
-            let ph = crate::config::bmx_home()?;
-            crate::config::ensure_base_dirs(&ph)?;
+            crate::config::ensure_base_dirs(home)?;
             match command {
-                ShimCommands::Init => crate::shim::shim_init(&ph),
+                ShimCommands::Init => crate::shim::shim_init(home),
                 ShimCommands::Path => {
-                    crate::shim::shim_path_line(&ph);
+                    crate::shim::shim_path_line(home);
                     Ok(())
                 }
                 ShimCommands::Add { app, name } => {
-                    crate::shim::shim_add(&ph, &app, name.as_deref())
+                    crate::shim::shim_add(home, &app, name.as_deref())
                 }
             }
         }
@@ -127,15 +176,15 @@ pub(crate) fn dispatch(cli: Cli, home: &Path) -> Result<()> {
                 match cli.app.as_deref() {
                     Some(a) => {
                         crate::pin::upsert_pin_in_dir(&cwd, a)?;
-                        run_app(home, a, &cli.args, cli.verbose)
+                        run_app(home, a, &cli.args, cli.verbose, cli.pin)
                     }
                     None => {
                         let spec = crate::pin::resolve_implicit_pin_spec(&cwd)?;
-                        run_app(home, &spec, &cli.args, cli.verbose)
+                        run_app(home, &spec, &cli.args, cli.verbose, cli.pin)
                     }
                 }
             } else if let Some(app) = cli.app {
-                run_app(home, &app, &cli.args, cli.verbose)
+                run_app(home, &app, &cli.args, cli.verbose, cli.pin)
             } else {
                 bail!(
                     "provide a command, an app name (e.g. `bmx ripgrep`), or use --pin with `.bmx/pins.toml` / `.bmx/pin`"
@@ -212,6 +261,53 @@ fn dispatch_checkout(home: &Path, command: CheckoutCommands) -> Result<()> {
         CheckoutCommands::Show => {
             let cfg = load_config(home)?;
             println!("{}", cfg.checkout_backend.as_str());
+            Ok(())
+        }
+    }
+}
+
+fn dispatch_trust(home: &Path, command: TrustCommands) -> Result<()> {
+    match command {
+        TrustCommands::Show => {
+            let policy = crate::trust::show_policy_toml(home)?;
+            println!("{policy}");
+            Ok(())
+        }
+        TrustCommands::AddKey { key, match_prefix } => {
+            crate::trust::add_allowed_signing_key(home, &key, match_prefix.as_deref())?;
+            println!(
+                "added signing key for {}",
+                match_prefix.as_deref().unwrap_or("<default>")
+            );
+            Ok(())
+        }
+        TrustCommands::SetSigned {
+            match_prefix,
+            enabled,
+        } => {
+            crate::trust::set_require_signed_commit(home, &match_prefix, enabled)?;
+            println!("set require_signed_commit={enabled} for {match_prefix}");
+            Ok(())
+        }
+        TrustCommands::SetAllow {
+            match_prefix,
+            allow,
+        } => {
+            crate::trust::set_allow(home, &match_prefix, allow)?;
+            println!("set allow={allow} for {match_prefix}");
+            Ok(())
+        }
+        TrustCommands::ImportRepo { app, match_prefix } => {
+            let layout = crate::layout::resolve_installed_layout(home, &app)?;
+            let n = crate::trust::import_signing_keys_from_repo(
+                home,
+                &layout.repo_dir,
+                match_prefix.as_deref(),
+            )?;
+            println!(
+                "imported {n} signing key value(s) from {}",
+                layout.repo_dir.display()
+            );
             Ok(())
         }
     }

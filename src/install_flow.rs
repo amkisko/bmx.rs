@@ -11,6 +11,9 @@ use crate::io::{read_toml, write_toml};
 use crate::layout::app_layout;
 use crate::repo::sync_repo;
 use crate::revision::checkout_requested_ref;
+use crate::trust::{
+    enforce_source_trust, prompt_import_signing_keys_for_source, prompt_untrusted_source_consent,
+};
 use crate::types::{BuildStrategy, InstallMetadata};
 
 /// Rebuild the cached worktree using saved metadata without fetching (for undo / local recovery).
@@ -21,6 +24,7 @@ pub(crate) fn rebuild_worktree_from_saved_metadata(
 ) -> Result<()> {
     let cfg = load_config(home)?;
     let layout = crate::layout::app_layout(home, &install.app);
+    enforce_source_trust(home, &install.source_url, &layout.repo_dir)?;
     let show_output = crate::runtime::subprocess_output_visible(cli_verbose);
     let strategy =
         BuildStrategy::parse(&install.strategy).or_else(|| detect_strategy(&layout.repo_dir));
@@ -65,6 +69,7 @@ pub(crate) fn reinstall_from_meta(
     home: &Path,
     install: InstallMetadata,
     cli_verbose: bool,
+    trust_prompt: bool,
 ) -> Result<()> {
     let cfg = load_config(home)?;
     let layout = app_layout(home, &install.app);
@@ -76,6 +81,11 @@ pub(crate) fn reinstall_from_meta(
         install.requested_ref.as_deref(),
         cli_verbose,
     )?;
+    prompt_untrusted_source_consent(home, &install.source_url, &layout.repo_dir)?;
+    if trust_prompt {
+        prompt_import_signing_keys_for_source(home, &install.source_url, &layout.repo_dir)?;
+    }
+    enforce_source_trust(home, &install.source_url, &layout.repo_dir)?;
 
     let strategy = detect_strategy(&layout.repo_dir).ok_or_else(|| {
         anyhow!(

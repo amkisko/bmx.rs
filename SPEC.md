@@ -4,7 +4,7 @@
 
 bmx is a language-agnostic CLI that installs, builds, and runs software from source repositories. Invoking `bmx <app-or-repo>` installs if needed and runs the app; all managed state lives in a local cache under the user’s home directory.
 
-Commands: `bmx <app> [-- …]` (optional `--rm`, `--pin`, `-v` / `--verbose`); `bmx exec <app> [-- …]` or `bmx exec --pin` when `.bmx/pins.toml` (or legacy `.bmx/pin`) defines the app; `bmx install [--as NAME]|uninstall|reinstall|self-update|update`; `bmx show <app> [--would-remove]`; `bmx search [WORDS …] [--backend auto|github|gitlab|aur|homebrew] [-n N] [--forks] [--url] [--no-probe]`; `bmx history [-n N]`; `bmx undo [ID] [--only APP]`; `bmx source set-default|show`; `bmx isolation set-default|show`; `bmx checkout set-default|show`; `bmx shim init|path|add`; `bmx doctor`.
+Commands: `bmx <app> [-- …]` (optional `--rm`, `--pin`, `--trust`, `-v` / `--verbose`); `bmx exec <app> [-- …]` or `bmx exec --pin` when `.bmx/pins.toml` (or legacy `.bmx/pin`) defines the app; `bmx install [--as NAME]|rebuild [--install] [APP]|uninstall|reinstall|self-update|update`; `bmx show <app> [--would-remove]`; `bmx search [WORDS …] [--backend auto|github|gitlab|aur|homebrew] [-n N] [--forks] [--url] [--no-probe]`; `bmx history [-n N]`; `bmx undo [ID] [--only APP]`; `bmx source set-default|show`; `bmx isolation set-default|show`; `bmx checkout set-default|show`; `bmx trust show|add-key|set-signed|set-allow|import-repo`; `bmx shim init|path|add`; `bmx doctor`.
 
 Search: discovers installable sources without cloning. `--backend auto` uses the GitHub or GitLab host from `default_source` (or `BMX_GITHUB_API_BASE`). GitHub/GitLab hits are optionally filtered with `--no-probe` off (default): one REST call per candidate lists the repository root; results must contain a root file bmx already recognizes (`Cargo.toml`, `CMakeLists.txt`, `PKGBUILD`, `Brewfile`, `Makefile`/`makefile`, `bmx.toml`, or a `.rb` formula stub). `--backend aur` queries the AUR RPC (clone URL `https://aur.archlinux.org/<PackageBase>.git`, always PKGBUILD-based). `--backend homebrew` reads `formulae.brew.sh/api/formula.json` and keeps formulas whose homepage (or stable tarball URL) maps to a GitHub/GitLab clone URL bmx can use.
 
@@ -36,6 +36,32 @@ requested_ref = "^1.0"
 resolved_commit = "7f3d5c1..."
 ```
 
+Optional trust policy (`~/.bmx/trust.toml`) can allow/deny source prefixes and require signed commits:
+
+```toml
+[default]
+allow = true
+require_signed_commit = false
+allowed_signing_keys = []      # key ids or fingerprints (optional)
+
+[[rules]]
+match_prefix = "https://github.com/acme/"
+allow = true
+require_signed_commit = true
+allowed_signing_keys = ["ABCD1234EF567890"]
+
+[[rules]]
+match_prefix = "https://github.com/untrusted/"
+allow = false
+```
+
+CLI helpers mutate this file:
+- `bmx trust show` prints effective policy TOML (defaults if file is absent).
+- `bmx trust add-key KEY [--match-prefix PREFIX]` appends signer key/fingerprint to `[default]` or a prefix rule.
+- `bmx trust set-signed --match-prefix PREFIX [--enabled true|false]` toggles `require_signed_commit`.
+- `bmx trust set-allow --match-prefix PREFIX [--allow true|false]` toggles allow/deny.
+- `bmx trust import-repo APP [--match-prefix PREFIX]` imports signer key/fingerprint from HEAD of an installed app repo.
+
 ## Source resolution and checkout
 
 An app argument may be a repo URL, a repository path form, a bare name (combined with `default_source` as `<default>/<name>.git`), or `name@ref` where ref is a tag, semver range, or SHA. For URL-like sources (`…://…`, `git@…`), or short `owner/repo` paths (with at least one `/`), you may append `:cargo_package` before an optional `@ref` (examples: `https://github.com/org/proj.rs:my-bin@main`, `org/proj.rs:my-bin` with `default_source = "https://github.com"`) to select a Cargo workspace member: the clone URL omits that suffix, installs use a distinct app id `{repo_id}__{package}`, Rust builds run `cargo build --release -p <package>`, and the release binary for that package is preferred. This does not apply to bare single-segment names or `registry_key:repo` forms that contain no `/` before the package suffix (so `corp:widgets` stays a registry key, not `corp` + package `widgets`).
@@ -45,6 +71,12 @@ Checkout and sync use `checkout_backend` in config. Default is `git` (system `gi
 ## Install, run, and updates
 
 Install resolves the source, clones or syncs the cache, checks out the requested revision when present, detects build strategy, runs the build, discovers the executable, and writes `install.toml`. Run installs when needed, reinstalls when the requested ref no longer matches metadata, runs the cached binary, and forwards its exit code. Uninstall removes `~/.bmx/apps/<app-id>/`. `bmx update [app]` with no `app` argument runs `sync + checkout + build` for every `install.toml` under `apps/`; with an app argument it does the same for that install only. Self-update builds from a given source and replaces the running `bmx` binary (see platform notes below).
+
+When `~/.bmx/trust.toml` exists, installs/reinstalls/runs enforce the matching trust rule (longest `match_prefix` wins, else `[default]`): `allow = false` blocks the source; `require_signed_commit = true` requires `git verify-commit HEAD` to pass; if `allowed_signing_keys` is non-empty, the commit signer key/fingerprint must match an entry.
+
+`--trust` on install/update/reinstall/self-update does **not** auto-trust silently: bmx displays concise human-review details from HEAD (source URL, commit, author, date, subject, signature status, signer identity, key id/fingerprint, and candidate key values) and asks for explicit consent before writing any keys to `trust.toml`.
+
+Independent of `--trust`, installs/updates/rebuilds/reinstalls/self-updates prompt for consent before proceeding with untrusted sources (no verified-good signature and signer not already trusted by policy).
 
 `bmx install APP --as NAME` stores the install under `apps/<NAME>/` and records `app = "<NAME>"` in `install.toml`. Use this when two different sources would map to the same default id, or when you want a second checkout of the same repo. Installing into an existing directory with a different resolved `source_url` fails with a hint to pick another `--as` or uninstall first.
 

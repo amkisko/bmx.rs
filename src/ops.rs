@@ -25,6 +25,9 @@ use crate::repo::sync_repo;
 use crate::revision::checkout_requested_ref;
 use crate::runtime::subprocess_output_visible;
 use crate::source::resolve_source;
+use crate::trust::{
+    enforce_source_trust, prompt_import_signing_keys_for_source, prompt_untrusted_source_consent,
+};
 use crate::types::{Config, InstallMetadata};
 
 fn install_refers_to_existing(
@@ -39,11 +42,36 @@ fn install_refers_to_existing(
     Ok(resolved == existing.source_url)
 }
 
-pub(crate) fn run_app(home: &Path, app: &str, args: &[String], verbose: bool) -> Result<()> {
+pub(crate) fn run_app(
+    home: &Path,
+    app: &str,
+    args: &[String],
+    verbose: bool,
+    persist_requested_ref: bool,
+) -> Result<()> {
     let spec = parse_app_spec(app);
     let layout = resolve_layout_for_run(home, app);
-    if must_reinstall(&layout.meta_file, &spec.requested_ref)? {
-        install_app(home, app, None, verbose, false)?;
+    let desired_persistent_ref = if persist_requested_ref {
+        spec.requested_ref.clone()
+    } else {
+        None
+    };
+    let needs_reinstall = if spec.requested_ref.is_some() && !persist_requested_ref {
+        // Explicit refs are one-off by default; reinstall to honor this invocation.
+        true
+    } else {
+        must_reinstall(&layout.meta_file, &desired_persistent_ref)?
+    };
+    if needs_reinstall {
+        install_app(
+            home,
+            app,
+            None,
+            verbose,
+            false,
+            persist_requested_ref,
+            false,
+        )?;
     }
 
     let cfg = load_config(home)?;
@@ -52,18 +80,28 @@ pub(crate) fn run_app(home: &Path, app: &str, args: &[String], verbose: bool) ->
     if cfg.integrity_check {
         verify_repo_matches_metadata(&layout, &metadata)?;
     }
+    enforce_source_trust(home, &metadata.source_url, &layout.repo_dir)?;
 
     let mut executable = layout.repo_dir.join(&metadata.executable_rel);
     executable = executable
         .canonicalize()
         .unwrap_or_else(|_| layout.repo_dir.join(&metadata.executable_rel));
     if !executable.exists() {
-        install_app(home, app, None, verbose, false)?;
+        install_app(
+            home,
+            app,
+            None,
+            verbose,
+            false,
+            persist_requested_ref,
+            false,
+        )?;
         let layout = resolve_layout_for_run(home, app);
         metadata = read_toml(&layout.meta_file)?;
         if cfg.integrity_check {
             verify_repo_matches_metadata(&layout, &metadata)?;
         }
+        enforce_source_trust(home, &metadata.source_url, &layout.repo_dir)?;
         executable = layout.repo_dir.join(&metadata.executable_rel);
         executable = executable
             .canonicalize()
@@ -113,6 +151,8 @@ pub(crate) fn install_app(
     install_as: Option<&str>,
     cli_verbose: bool,
     record_history: bool,
+    persist_requested_ref: bool,
+    trust_prompt: bool,
 ) -> Result<()> {
     let spec = parse_app_spec(app);
     let cfg = load_config(home)?;
@@ -125,6 +165,7 @@ pub(crate) fn install_app(
 
     if layout.meta_file.exists() {
         let existing: InstallMetadata = read_toml(&layout.meta_file)?;
+        let persisted_requested_ref = existing.requested_ref.clone();
         if let Some(a) = install_as {
             let want = sanitize_install_as(a)?;
             if existing.app != want {
@@ -155,7 +196,12 @@ pub(crate) fn install_app(
         let app_id = merged.app.clone();
         let source_url = merged.source_url.clone();
         let snapshot_dir = capture_install_snapshot(home, &app_id)?;
-        reinstall_from_meta(home, merged, cli_verbose)?;
+        reinstall_from_meta(home, merged, cli_verbose, trust_prompt)?;
+        if !persist_requested_ref {
+            let mut refreshed: InstallMetadata = read_toml(&layout.meta_file)?;
+            refreshed.requested_ref = persisted_requested_ref;
+            crate::io::write_toml(&layout.meta_file, &refreshed)?;
+        }
         let id = new_action_id();
         append_audit(
             home,
@@ -193,6 +239,11 @@ pub(crate) fn install_app(
     sync_repo(&source_url, &layout.repo_dir, &cfg, cli_verbose)?;
     let resolved_commit =
         checkout_requested_ref(&layout.repo_dir, spec.requested_ref.as_deref(), cli_verbose)?;
+    prompt_untrusted_source_consent(home, &source_url, &layout.repo_dir)?;
+    if trust_prompt {
+        prompt_import_signing_keys_for_source(home, &source_url, &layout.repo_dir)?;
+    }
+    enforce_source_trust(home, &source_url, &layout.repo_dir)?;
 
     let strategy = detect_strategy(&layout.repo_dir).ok_or_else(|| {
         anyhow!(
@@ -215,7 +266,11 @@ pub(crate) fn install_app(
         source_url,
         executable_rel,
         strategy: strategy.as_str().to_string(),
-        requested_ref: spec.requested_ref,
+        requested_ref: if persist_requested_ref {
+            spec.requested_ref
+        } else {
+            None
+        },
         resolved_commit,
         rust_package: spec.cargo_package.clone(),
     };
@@ -253,13 +308,14 @@ pub(crate) fn reinstall_app(
     app: &str,
     cli_verbose: bool,
     record_history: bool,
+    trust_prompt: bool,
 ) -> Result<()> {
     let layout = resolve_installed_layout(home, app)?;
     let meta: InstallMetadata = read_toml(&layout.meta_file)?;
     let app_id = meta.app.clone();
     let source_url = meta.source_url.clone();
     let snapshot_dir = capture_install_snapshot(home, &app_id)?;
-    reinstall_from_meta(home, meta, cli_verbose)?;
+    reinstall_from_meta(home, meta, cli_verbose, trust_prompt)?;
     let id = new_action_id();
     append_audit(
         home,
@@ -286,6 +342,70 @@ pub(crate) fn reinstall_app(
             }],
         },
         record_history,
+    )?;
+    Ok(())
+}
+
+pub(crate) fn rebuild_app(
+    home: &Path,
+    app: &str,
+    install: bool,
+    cli_verbose: bool,
+    record_history: bool,
+    persist_requested_ref: bool,
+    trust_prompt: bool,
+) -> Result<()> {
+    if install {
+        return install_app(
+            home,
+            app,
+            None,
+            cli_verbose,
+            record_history,
+            persist_requested_ref,
+            trust_prompt,
+        );
+    }
+
+    let cfg = load_config(home)?;
+    let spec = parse_app_spec(app);
+    let layout = resolve_installed_layout(home, app)?;
+    let existing: InstallMetadata = read_toml(&layout.meta_file)?;
+    if !install_refers_to_existing(&cfg, &spec, &existing)? {
+        anyhow::bail!(
+            "requested rebuild source does not match installed source for `{}`",
+            existing.app
+        );
+    }
+
+    let requested_ref = spec
+        .requested_ref
+        .clone()
+        .or(existing.requested_ref.clone());
+    let rust_package = spec.cargo_package.clone().or(existing.rust_package.clone());
+    let source_url = existing.source_url.clone();
+
+    sync_repo(&source_url, &layout.repo_dir, &cfg, cli_verbose)?;
+    checkout_requested_ref(&layout.repo_dir, requested_ref.as_deref(), cli_verbose)?;
+    prompt_untrusted_source_consent(home, &source_url, &layout.repo_dir)?;
+    if trust_prompt {
+        prompt_import_signing_keys_for_source(home, &source_url, &layout.repo_dir)?;
+    }
+    enforce_source_trust(home, &source_url, &layout.repo_dir)?;
+
+    let strategy = detect_strategy(&layout.repo_dir).ok_or_else(|| {
+        anyhow!(
+            "unable to detect build strategy for {}",
+            layout.repo_dir.display()
+        )
+    })?;
+    let show_output = subprocess_output_visible(cli_verbose);
+    build_with_strategy(
+        &strategy,
+        &layout.repo_dir,
+        cfg.build_isolation,
+        show_output,
+        rust_package.as_deref(),
     )?;
     Ok(())
 }
@@ -334,8 +454,9 @@ pub(crate) fn self_update(
     app: &str,
     cli_verbose: bool,
     record_history: bool,
+    trust_prompt: bool,
 ) -> Result<()> {
-    install_app(home, app, None, cli_verbose, false)?;
+    install_app(home, app, None, cli_verbose, false, true, trust_prompt)?;
 
     let layout = resolve_layout_for_run(home, app);
     let metadata: InstallMetadata = read_toml(&layout.meta_file)?;
@@ -470,7 +591,12 @@ pub(crate) fn uninstall_app(home: &Path, app: &str, record_history: bool) -> Res
     Ok(())
 }
 
-pub(crate) fn update_all(home: &Path, cli_verbose: bool, record_history: bool) -> Result<()> {
+pub(crate) fn update_all(
+    home: &Path,
+    cli_verbose: bool,
+    record_history: bool,
+    trust_prompt: bool,
+) -> Result<()> {
     let apps_root = home.join("apps");
     if !apps_root.exists() {
         return Ok(());
@@ -490,7 +616,7 @@ pub(crate) fn update_all(home: &Path, cli_verbose: bool, record_history: bool) -
     plan.sort_by(|a, b| a.0.app.cmp(&b.0.app));
 
     for (install, _) in &plan {
-        reinstall_from_meta(home, install.clone(), cli_verbose)?;
+        reinstall_from_meta(home, install.clone(), cli_verbose, trust_prompt)?;
     }
 
     if plan.is_empty() {

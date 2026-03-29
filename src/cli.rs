@@ -19,6 +19,10 @@ pub(crate) struct Cli {
     #[arg(short, long, global = true)]
     pub(crate) verbose: bool,
 
+    /// During install/update operations, show signer details from HEAD and ask for consent before importing signer keys into trust policy.
+    #[arg(long, global = true)]
+    pub(crate) trust: bool,
+
     #[arg(help = "App/repo name to run (default command)")]
     pub(crate) app: Option<String>,
 
@@ -39,6 +43,14 @@ pub(crate) enum Commands {
         #[arg(long = "as", value_name = "NAME")]
         install_as: Option<String>,
         app: String,
+    },
+    /// Rebuild an app. Without `--install`, rebuilds installed source without rewriting install metadata.
+    /// With `--install`, uses install/update flow to persist executable metadata.
+    Rebuild {
+        #[arg(long)]
+        install: bool,
+        /// App spec. With `--pin` and no app, read pins; with `--pin` and app, upsert `./.bmx/pins.toml` and rebuild.
+        app: Option<String>,
     },
     Uninstall {
         app: String,
@@ -73,6 +85,10 @@ pub(crate) enum Commands {
     Checkout {
         #[command(subcommand)]
         command: CheckoutCommands,
+    },
+    Trust {
+        #[command(subcommand)]
+        command: TrustCommands,
     },
     Shim {
         #[command(subcommand)]
@@ -142,6 +158,38 @@ pub(crate) enum IsolationCommands {
 pub(crate) enum CheckoutCommands {
     SetDefault { backend: String },
     Show,
+}
+
+#[derive(Subcommand, Debug)]
+pub(crate) enum TrustCommands {
+    /// Print effective ~/.bmx/trust.toml (or defaults when missing).
+    Show,
+    /// Add an allowed signer key/fingerprint to default or a matching prefix rule.
+    AddKey {
+        key: String,
+        #[arg(long = "match-prefix")]
+        match_prefix: Option<String>,
+    },
+    /// Set whether signed commits are required for a source prefix rule.
+    SetSigned {
+        #[arg(long = "match-prefix")]
+        match_prefix: String,
+        #[arg(long, default_value_t = true)]
+        enabled: bool,
+    },
+    /// Allow or block a source prefix rule.
+    SetAllow {
+        #[arg(long = "match-prefix")]
+        match_prefix: String,
+        #[arg(long, default_value_t = true)]
+        allow: bool,
+    },
+    /// Import signer key/fingerprint from HEAD of an installed app repo.
+    ImportRepo {
+        app: String,
+        #[arg(long = "match-prefix")]
+        match_prefix: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, ValueEnum)]

@@ -16,6 +16,19 @@ fn run_git(repo: &Path, args: &[&str]) {
     assert!(status.success(), "git {:?} should succeed", args);
 }
 
+fn git_stdout(repo: &Path, args: &[&str]) -> String {
+    let output = Command::new("git")
+        .current_dir(repo)
+        .args(args)
+        .output()
+        .expect("git command should run");
+    assert!(output.status.success(), "git {:?} should succeed", args);
+    String::from_utf8(output.stdout)
+        .expect("utf8 git output")
+        .trim()
+        .to_string()
+}
+
 fn init_make_repo(root: &Path, repo_name: &str, bin_name: &str, msg: &str) -> PathBuf {
     let repo = root.join(repo_name);
     fs::create_dir_all(&repo).expect("create repo dir");
@@ -127,6 +140,7 @@ fn app_id_for_input(app: &str) -> String {
 fn bmx(home: &Path) -> Command {
     let mut cmd = Command::cargo_bin("bmx").expect("binary should build");
     cmd.env("HOME", home);
+    cmd.env("BMX_TRUST_ASSUME_YES", "1");
     cmd
 }
 
@@ -274,6 +288,60 @@ fn install_exec_update_and_uninstall_explicit_file_url() {
         !home.path().join(".bmx/apps").join(app_id).exists(),
         "app directory should be removed after uninstall"
     );
+}
+
+#[test]
+fn rebuild_with_install_installs_and_updates_runnable_binary() {
+    let home = TempDir::new().expect("home tempdir");
+    let repos = TempDir::new().expect("repos tempdir");
+    let repo = init_make_repo(
+        repos.path(),
+        "rebuild-install",
+        "rebuild-install",
+        "REBUILD_OK",
+    );
+    let app = format!("file://{}", repo.display());
+
+    bmx(home.path())
+        .args(["rebuild", "--install", &app])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("rebuilt and installed"));
+
+    bmx(home.path())
+        .args(["exec", &app])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("REBUILD_OK"));
+}
+
+#[test]
+fn rebuild_without_install_can_build_exact_requested_version() {
+    let home = TempDir::new().expect("home tempdir");
+    let repos = TempDir::new().expect("repos tempdir");
+    let repo = init_make_repo(repos.path(), "rebuild-version", "rebuild-version", "V1");
+    run_git(&repo, &["tag", "v1.0.0"]);
+    fs::write(
+        repo.join("Makefile"),
+        "all:\n\tmkdir -p bin\n\tprintf '#!/bin/sh\\necho V2\\n' > bin/rebuild-version\n\tchmod +x bin/rebuild-version\n",
+    )
+    .expect("write v2 makefile");
+    run_git(&repo, &["add", "."]);
+    run_git(&repo, &["commit", "-m", "v2"]);
+    let v100_sha = git_stdout(&repo, &["rev-list", "-n", "1", "v1.0.0"]);
+    let app = format!("file://{}", repo.display());
+
+    bmx(home.path()).args(["install", &app]).assert().success();
+
+    bmx(home.path())
+        .args(["rebuild", &format!("{app}@{v100_sha}")])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("rebuilt"));
+
+    let cached_repo = home.path().join(".bmx/apps/rebuild-version/repo");
+    let head = git_stdout(&cached_repo, &["rev-parse", "HEAD"]);
+    assert_eq!(head, v100_sha);
 }
 
 #[test]
