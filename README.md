@@ -40,7 +40,7 @@ User-local install without touching `/usr/local`:
 
 ### Build
 
-Each install lives in `~/.bmx/apps/<id>/` (`repo/` is the clone, `install.toml` is metadata). On install or first run, bmx resolves the spec (bare name, `owner/repo`, URL, `registry:repo`, `name@ref` / semver), syncs git, checks out the ref, picks a stack (**Rust → CMake → Make → Homebrew → AUR**), builds, then stores the executable. Per-repo `bmx.toml` can set `strategy`, `workdir`, `run`, and `[bmx.hooks]` (`pre_run`, `post_install`). Workspace members: `owner/repo.rs:crate@ref`. Host vs **Docker/Podman/nerdctl**: `bmx isolation`; optional `integrity_check` in `config.toml` compares live HEAD to metadata on run.
+Each install lives in `~/.bmx/apps/<id>/` (`repo/` is the clone, `install.toml` is metadata). On install or first run, bmx resolves the spec (bare name, `owner/repo`, URL, `registry:repo`, `name@ref` / semver), syncs git, checks out the ref, picks a stack (Rust → CMake → Make → Homebrew → AUR), builds, then stores the executable. Per-repo `bmx.toml` can set `strategy`, `workdir`, `run`, and `[bmx.hooks]` (`pre_run`, `post_install`). Workspace members: `owner/repo.rs:crate@ref`. Host vs Docker/Podman/nerdctl: `bmx isolation`; optional `integrity_check` in `config.toml` compares live HEAD to metadata on run.
 
 Where is the code, and how to rebuild after you edit it:
 
@@ -70,7 +70,7 @@ bmx checkout set-default BACKEND && bmx checkout show   # git | gh | custom
 bmx isolation set-default MODE && bmx isolation show    # off | auto | docker | …
 ```
 
-Optional `[registries]` in `~/.bmx/config.toml` (URL aliases). **Undo:** `bmx history`, then `bmx undo`, `bmx undo ID`, or `bmx undo --only APP` after a mass update. **Shims (Unix):** `bmx shim init`, `bmx shim path`, `bmx shim add APP`. **No persistent state:** add `--rm` to any invocation (temp `BMX_HOME`).
+Optional `[registries]` in `~/.bmx/config.toml` (URL aliases). Undo: `bmx history`, then `bmx undo`, `bmx undo ID`, or `bmx undo --only APP` after a mass update. Shims (Unix): `bmx shim init`, `bmx shim path`, `bmx shim add APP`. No persistent state: add `--rm` to any invocation (temp `BMX_HOME`).
 
 ### Execute
 
@@ -81,7 +81,7 @@ bmx exec --pin -- ARGS             # app line from .bmx/pin (walks parents)
 bmx APP --pin -- ARGS              # same, default command
 ```
 
-`-v` / `--verbose` prints app id, commit, and binary path; the child **prepends** that binary’s directory to `PATH`. With `integrity_check = true`, run/exec can verify the checkout matches `install.toml`. Details: `bmx --help` and [SPEC.md](SPEC.md).
+`-v` / `--verbose` prints app id, commit, and binary path; the child prepends that binary’s directory to `PATH`. With `integrity_check = true`, run/exec can verify the checkout matches `install.toml`. Details: `bmx --help` and [SPEC.md](SPEC.md).
 
 ## Development
 
@@ -99,7 +99,7 @@ For questions, expectations, and how to propose changes, see [CONTRIBUTING.md](C
 
 ## Security
 
-If you discover a security vulnerability, please report it responsibly. **Do not** open a public issue. See [SECURITY.md](SECURITY.md) for how to report.
+If you discover a security vulnerability, please report it responsibly. Do not open a public issue. See [SECURITY.md](SECURITY.md) for how to report.
 
 ## License
 

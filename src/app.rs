@@ -19,12 +19,20 @@ pub(crate) fn dispatch(cli: Cli, home: &Path) -> Result<()> {
     let record = !cli.rm;
     match cli.command {
         Some(Commands::Exec { app, args }) => {
+            let cwd = std::env::current_dir()?;
             let spec = if cli.pin {
-                let cwd = std::env::current_dir()?;
-                crate::pin::read_pin_from_ancestors(&cwd)?
+                match app.as_deref() {
+                    Some(a) => {
+                        crate::pin::upsert_pin_in_dir(&cwd, a)?;
+                        a.to_string()
+                    }
+                    None => crate::pin::resolve_implicit_pin_spec(&cwd)?,
+                }
             } else {
                 app.ok_or_else(|| {
-                    anyhow::anyhow!("`bmx exec` requires APP, or use --pin with a `.bmx/pin` file")
+                    anyhow::anyhow!(
+                        "`bmx exec` requires APP, or use --pin with `.bmx/pins.toml` / `.bmx/pin`"
+                    )
                 })?
             };
             run_app(home, &spec, &args, cli.verbose)
@@ -116,13 +124,21 @@ pub(crate) fn dispatch(cli: Cli, home: &Path) -> Result<()> {
         None => {
             let cwd = std::env::current_dir()?;
             if cli.pin {
-                let spec = crate::pin::read_pin_from_ancestors(&cwd)?;
-                run_app(home, &spec, &cli.args, cli.verbose)
+                match cli.app.as_deref() {
+                    Some(a) => {
+                        crate::pin::upsert_pin_in_dir(&cwd, a)?;
+                        run_app(home, a, &cli.args, cli.verbose)
+                    }
+                    None => {
+                        let spec = crate::pin::resolve_implicit_pin_spec(&cwd)?;
+                        run_app(home, &spec, &cli.args, cli.verbose)
+                    }
+                }
             } else if let Some(app) = cli.app {
                 run_app(home, &app, &cli.args, cli.verbose)
             } else {
                 bail!(
-                    "provide a command, an app name (e.g. `bmx ripgrep`), or use --pin with `.bmx/pin`"
+                    "provide a command, an app name (e.g. `bmx ripgrep`), or use --pin with `.bmx/pins.toml` / `.bmx/pin`"
                 )
             }
         }

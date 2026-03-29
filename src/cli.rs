@@ -11,7 +11,7 @@ pub(crate) struct Cli {
     #[arg(long, global = true)]
     pub(crate) rm: bool,
 
-    /// Resolve the app from `.bmx/pin` in the current directory or a parent (see SPEC).
+    /// With an explicit app spec, merge it into `./.bmx/pins.toml` (cwd) and run; without an app, resolve from pins (see SPEC).
     #[arg(long, global = true)]
     pub(crate) pin: bool,
 
@@ -29,7 +29,7 @@ pub(crate) struct Cli {
 #[derive(Subcommand, Debug)]
 pub(crate) enum Commands {
     Exec {
-        /// App spec, or omit with `--pin` to use `.bmx/pin`.
+        /// App spec. With `--pin` and no app, read pins; with `--pin` and app, upsert `./.bmx/pins.toml` and run.
         app: Option<String>,
         #[arg(num_args = 0.., allow_hyphen_values = true)]
         args: Vec<String>,
