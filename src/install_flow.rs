@@ -11,7 +11,55 @@ use crate::app_spec::app_spec_from_install_meta;
 use crate::layout::app_layout;
 use crate::repo::sync_repo;
 use crate::revision::checkout_requested_ref;
-use crate::types::InstallMetadata;
+use crate::types::{BuildStrategy, InstallMetadata};
+
+/// Rebuild the cached worktree using saved metadata without fetching (for undo / local recovery).
+pub(crate) fn rebuild_worktree_from_saved_metadata(
+    home: &Path,
+    install: &InstallMetadata,
+    cli_verbose: bool,
+) -> Result<()> {
+    let cfg = load_config(home)?;
+    let layout = crate::layout::app_layout(home, &install.app);
+    let show_output = crate::runtime::subprocess_output_visible(cli_verbose);
+    let strategy =
+        BuildStrategy::parse(&install.strategy).or_else(|| detect_strategy(&layout.repo_dir));
+    let strategy = strategy.ok_or_else(|| {
+        anyhow!(
+            "unable to determine build strategy for {}",
+            layout.repo_dir.display()
+        )
+    })?;
+    let spec = app_spec_from_install_meta(
+        &install.source_url,
+        install.requested_ref.clone(),
+        install.rust_package.clone(),
+    );
+    build_with_strategy(
+        &strategy,
+        &layout.repo_dir,
+        cfg.build_isolation,
+        show_output,
+        spec.cargo_package.as_deref(),
+    )?;
+    let executable_rel = detect_executable_rel(&layout.repo_dir, &spec)?;
+    let resolved_commit =
+        crate::git_cmd::git_output(&layout.repo_dir, &["rev-parse", "HEAD"], &[]).ok();
+    write_toml(
+        &layout.meta_file,
+        &InstallMetadata {
+            app: install.app.clone(),
+            source_url: install.source_url.clone(),
+            executable_rel,
+            strategy: strategy.as_str().to_string(),
+            requested_ref: install.requested_ref.clone(),
+            resolved_commit: resolved_commit.filter(|s| !s.is_empty()),
+            rust_package: install.rust_package.clone(),
+        },
+    )?;
+    crate::hooks::run_post_install_hook(&layout.repo_dir)?;
+    Ok(())
+}
 
 pub(crate) fn reinstall_from_meta(
     home: &Path,

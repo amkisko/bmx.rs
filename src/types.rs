@@ -118,7 +118,7 @@ impl BuildIsolation {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct InstallMetadata {
     pub(crate) app: String,
     pub(crate) source_url: String,

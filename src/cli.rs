@@ -76,6 +76,19 @@ pub(crate) enum Commands {
         command: ShimCommands,
     },
     Doctor,
+    /// Show recent logged actions (see `bmx undo`).
+    History {
+        #[arg(short = 'n', long, default_value_t = 30)]
+        limit: usize,
+    },
+    /// Roll back the most recent undoable action (`install` / `update` / `reinstall` / `update all`), or a specific id from `bmx history`.
+    Undo {
+        /// Action id (must be the latest undoable step unless you undo in order).
+        id: Option<String>,
+        /// Undo just this install from the **top** undo frame (e.g. one app after `bmx update` with no app argument). Not with `id`.
+        #[arg(long = "only", value_name = "APP")]
+        only_app: Option<String>,
+    },
 }
 
 #[derive(Subcommand, Debug)]

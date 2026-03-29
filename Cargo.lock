@@ -60,6 +60,7 @@ dependencies = [
  "predicates",
  "semver",
  "serde",
+ "serde_json",
  "serial_test",
  "temp-env",
  "tempfile",

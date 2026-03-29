@@ -6,6 +6,7 @@ use crate::cli::{
     CheckoutCommands, Cli, Commands, IsolationCommands, ShimCommands, SourceCommands,
 };
 use crate::config::{load_config, save_config};
+use crate::history::{list_recent_audit, undo, undo_one_app};
 use crate::ops::{
     doctor, install_app, reinstall_app, run_app, self_update, show_package, uninstall_app,
     update_all,
@@ -14,6 +15,7 @@ use crate::source::normalize_source_base;
 use crate::types::{BuildIsolation, CheckoutBackend};
 
 pub(crate) fn dispatch(cli: Cli, home: &Path) -> Result<()> {
+    let record = !cli.rm;
     match cli.command {
         Some(Commands::Exec { app, args }) => {
             let spec = if cli.pin {
@@ -27,33 +29,39 @@ pub(crate) fn dispatch(cli: Cli, home: &Path) -> Result<()> {
             run_app(home, &spec, &args, cli.verbose)
         }
         Some(Commands::Install { app, install_as }) => {
-            install_app(home, &app, install_as.as_deref(), cli.verbose)?;
+            install_app(
+                home,
+                &app,
+                install_as.as_deref(),
+                cli.verbose,
+                record,
+            )?;
             println!("installed {app}");
             Ok(())
         }
         Some(Commands::Uninstall { app }) => {
-            uninstall_app(home, &app)?;
+            uninstall_app(home, &app, record)?;
             println!("uninstalled {app}");
             Ok(())
         }
         Some(Commands::Reinstall { app }) => {
-            reinstall_app(home, &app, cli.verbose)?;
+            reinstall_app(home, &app, cli.verbose, record)?;
             println!("reinstalled {app}");
             Ok(())
         }
         Some(Commands::SelfUpdate { app }) => {
-            self_update(home, &app, cli.verbose)?;
+            self_update(home, &app, cli.verbose, record)?;
             println!("self-updated {app}");
             Ok(())
         }
         Some(Commands::Update { app }) => match app {
             Some(app_name) => {
-                install_app(home, &app_name, None, cli.verbose)?;
+                install_app(home, &app_name, None, cli.verbose, record)?;
                 println!("updated {app_name}");
                 Ok(())
             }
             None => {
-                update_all(home, cli.verbose)?;
+                update_all(home, cli.verbose, record)?;
                 println!("updated installed apps");
                 Ok(())
             }
@@ -76,6 +84,29 @@ pub(crate) fn dispatch(cli: Cli, home: &Path) -> Result<()> {
             }
         }
         Some(Commands::Show { app, would_remove }) => show_package(home, &app, would_remove),
+        Some(Commands::History { limit }) => {
+            for e in list_recent_audit(home, limit)? {
+                println!(
+                    "{}  {}  {}  undoable={}  {}",
+                    e.id,
+                    e.ts,
+                    e.kind,
+                    e.undoable,
+                    e.summary
+                );
+            }
+            Ok(())
+        }
+        Some(Commands::Undo { id, only_app }) => {
+            if id.is_some() && only_app.is_some() {
+                bail!("use either `bmx undo [id]` or `bmx undo --only <app>`, not both");
+            }
+            if let Some(app) = only_app {
+                undo_one_app(home, &app, cli.verbose, record)
+            } else {
+                undo(home, id.as_deref(), cli.verbose, record)
+            }
+        }
         Some(Commands::Doctor) => doctor(home),
         None => {
             let cwd = std::env::current_dir()?;

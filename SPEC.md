@@ -4,7 +4,7 @@
 
 bmx is a language-agnostic CLI that installs, builds, and runs software from source repositories. Invoking `bmx <app-or-repo>` installs if needed and runs the app; all managed state lives in a local cache under the user’s home directory.
 
-Commands: `bmx <app> [-- …]` (optional `--rm`, `--pin`, `-v` / `--verbose`); `bmx exec <app> [-- …]` or `bmx exec --pin` when `.bmx/pin` defines the app; `bmx install [--as NAME]|uninstall|reinstall|self-update|update`; `bmx show <app> [--would-remove]`; `bmx source set-default|show`; `bmx isolation set-default|show`; `bmx checkout set-default|show`; `bmx shim init|path|add`; `bmx doctor`.
+Commands: `bmx <app> [-- …]` (optional `--rm`, `--pin`, `-v` / `--verbose`); `bmx exec <app> [-- …]` or `bmx exec --pin` when `.bmx/pin` defines the app; `bmx install [--as NAME]|uninstall|reinstall|self-update|update`; `bmx show <app> [--would-remove]`; `bmx history [-n N]`; `bmx undo [ID] [--only APP]`; `bmx source set-default|show`; `bmx isolation set-default|show`; `bmx checkout set-default|show`; `bmx shim init|path|add`; `bmx doctor`.
 
 bmx is not a language-specific package manager: no `package.json`, npm client, or bundled JavaScript runtime. Optional `[registries]` entries in `config.toml` are git URL aliases only, not npm/gem/cargo indices.
 
@@ -12,7 +12,7 @@ Not in this version: multi-version side-by-side management, a shared compile cac
 
 ## State layout and configuration file
 
-Everything is under `~/.bmx`: `config.toml`, `apps/<app-id>/repo/`, and `apps/<app-id>/install.toml`.
+Everything is under `~/.bmx`: `config.toml`, `apps/<app-id>/repo/`, and `apps/<app-id>/install.toml`. Optional: `audit.log.jsonl` (append-only action log), `undo-stack.json` (last undoable operations, capped), and `snapshots/` (files captured before mutating installs).
 
 ```toml
 default_source = "https://github.com"
@@ -49,6 +49,17 @@ Install resolves the source, clones or syncs the cache, checks out the requested
 `bmx reinstall APP` re-fetches, re-checks out per `install.toml`, and rebuilds **without** deleting the cache directory (developer workflow after local edits in the clone).
 
 `bmx show APP` lists files under the cached repository (`apps/<id>/repo/`). `bmx show APP --would-remove` lists all paths that `bmx uninstall APP` would delete (including `install.toml`). The global `--rm` flag still means ephemeral `BMX_HOME` only; prefer `--would-remove` for uninstall previews.
+
+## History and undo
+
+`bmx history` prints recent entries from `audit.log.jsonl` (id, unix time, kind, undoable flag, summary). **`--rm` runs do not write** history or undo data (ephemeral home only).
+
+**Undoable** steps record a marker in `undo-stack.json` and (for mutations of existing installs) a directory under `snapshots/` holding the previous `install.toml` and `git_head.txt` (HEAD before the operation):
+
+- Fresh **`install`**: undo removes `apps/<id>/` entirely.
+- **`update`**, **`reinstall`**, **`install`** that refreshes an existing app, or **`update` with no app** (`update all`): undo restores saved metadata, `git checkout --force` to the saved commit when available, and rebuilds **without** fetching.
+
+**`bmx undo`** reverses the **top** frame on the stack. **`bmx undo <id>`** reverses the frame with that id only if it **is** the top frame (undo newer steps first). **`bmx undo --only <app>`** (same app forms as `bmx install`) rolls back **one** install from the top frame only—useful after **`bmx update`** touched every app: other apps from that batch stay updated until you `bmx undo --only` them too or run **`bmx undo`** to revert the rest at once. Partial undo does not apply to a lone fresh **`install`** frame (use full **`bmx undo`**). Uninstall and self-update are logged with `undoable: false` (no automatic rollback). The stack is capped (oldest frames and their snapshot dirs are dropped).
 
 With `--rm`, bmx uses a throwaway temp directory as `BMX_HOME` (default-shaped config only; the real `~/.bmx` is not read) and deletes it after the command—useful for one-off runs without touching the persistent cache.
 

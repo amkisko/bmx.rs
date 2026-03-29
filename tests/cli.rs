@@ -377,6 +377,93 @@ fn debug_mode_shows_command_logs() {
 }
 
 #[test]
+fn install_history_and_undo_removes_fresh_install() {
+    let home = TempDir::new().expect("home tempdir");
+    let repos = TempDir::new().expect("repos tempdir");
+    let repo = init_make_repo(repos.path(), "undo-tool", "undo-tool", "UNDO_OK");
+    let app = format!("file://{}", repo.display());
+    let app_id = app_id_for_input(&app);
+
+    bmx(home.path())
+        .args(["install", &app])
+        .assert()
+        .success();
+    assert!(
+        home.path().join(".bmx/apps").join(&app_id).exists(),
+        "app dir should exist after install"
+    );
+
+    bmx(home.path())
+        .args(["history", "-n", "5"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("install"));
+
+    bmx(home.path())
+        .args(["undo"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("undone"));
+
+    assert!(
+        !home.path().join(".bmx/apps").join(&app_id).exists(),
+        "undo should remove a fresh install"
+    );
+}
+
+#[test]
+fn update_all_then_undo_only_one_app_leaves_batch_for_the_other() {
+    let home = TempDir::new().expect("home tempdir");
+    let repos = TempDir::new().expect("repos tempdir");
+    let r1 = init_make_repo(repos.path(), "batch-a", "bin-a", "A");
+    let r2 = init_make_repo(repos.path(), "batch-b", "bin-b", "B");
+    let app1 = format!("file://{}", r1.display());
+    let app2 = format!("file://{}", r2.display());
+    let id1 = app_id_for_input(&app1);
+    let id2 = app_id_for_input(&app2);
+
+    bmx(home.path())
+        .args(["install", &app1])
+        .assert()
+        .success();
+    bmx(home.path())
+        .args(["install", &app2])
+        .assert()
+        .success();
+
+    bmx(home.path()).args(["update"]).assert().success();
+
+    let stack_path = home.path().join(".bmx/undo-stack.json");
+    let stack_raw = fs::read_to_string(&stack_path).expect("undo stack");
+    assert!(
+        stack_raw.contains(&id1) && stack_raw.contains(&id2),
+        "update-all frame should reference both app ids: {stack_raw}"
+    );
+
+    bmx(home.path())
+        .args(["undo", "--only", &id1])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("undone one install"));
+
+    let stack_raw2 = fs::read_to_string(&stack_path).expect("undo stack");
+    let frames: Vec<serde_json::Value> =
+        serde_json::from_str(&stack_raw2).expect("parse undo stack");
+    let last = frames.last().expect("stack non-empty");
+    let items = last["items"].as_array().expect("items array");
+    assert_eq!(
+        items.len(),
+        1,
+        "top frame should have one pending rollback after partial undo: {stack_raw2}"
+    );
+    assert_eq!(items[0]["app_id"].as_str().expect("app_id"), id2);
+    assert!(
+        home.path().join(".bmx/apps").join(&id1).exists(),
+        "first app should still exist after snapshot rollback"
+    );
+}
+
+#[test]
 fn show_lists_repo_files_and_would_remove_includes_install_metadata() {
     let home = TempDir::new().expect("home tempdir");
     let repos = TempDir::new().expect("repos tempdir");

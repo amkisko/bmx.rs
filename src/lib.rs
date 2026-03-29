@@ -5,6 +5,7 @@ mod cli;
 mod config;
 mod executable;
 mod git_cmd;
+mod history;
 mod hooks;
 mod install_flow;
 mod integrity;

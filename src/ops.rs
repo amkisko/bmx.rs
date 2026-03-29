@@ -9,6 +9,10 @@ use crate::app_spec::{AppSpec, layout_id, parse_app_spec};
 use crate::build::{build_with_strategy, detect_strategy};
 use crate::config::load_config;
 use crate::executable::detect_executable_rel;
+use crate::history::{
+    AuditEntry, UndoFrame, UndoItem, append_audit, audit_unix_ts, capture_install_snapshot,
+    new_action_id, push_undo_frame,
+};
 use crate::hooks;
 use crate::install_flow::{must_reinstall, reinstall_from_meta};
 use crate::integrity::verify_repo_matches_metadata;
@@ -35,7 +39,7 @@ pub(crate) fn run_app(home: &Path, app: &str, args: &[String], verbose: bool) ->
     let spec = parse_app_spec(app);
     let layout = resolve_layout_for_run(home, app);
     if must_reinstall(&layout.meta_file, &spec.requested_ref)? {
-        install_app(home, app, None, verbose)?;
+        install_app(home, app, None, verbose, false)?;
     }
 
     let cfg = load_config(home)?;
@@ -50,7 +54,7 @@ pub(crate) fn run_app(home: &Path, app: &str, args: &[String], verbose: bool) ->
         .canonicalize()
         .unwrap_or_else(|_| layout.repo_dir.join(&metadata.executable_rel));
     if !executable.exists() {
-        install_app(home, app, None, verbose)?;
+        install_app(home, app, None, verbose, false)?;
         let layout = resolve_layout_for_run(home, app);
         metadata = read_toml(&layout.meta_file)?;
         if cfg.integrity_check {
@@ -107,6 +111,7 @@ pub(crate) fn install_app(
     app: &str,
     install_as: Option<&str>,
     cli_verbose: bool,
+    record_history: bool,
 ) -> Result<()> {
     let spec = parse_app_spec(app);
     let cfg = load_config(home)?;
@@ -146,7 +151,36 @@ pub(crate) fn install_app(
         if spec.cargo_package.is_some() {
             merged.rust_package = spec.cargo_package.clone();
         }
-        return reinstall_from_meta(home, merged, cli_verbose);
+        let app_id = merged.app.clone();
+        let snapshot_dir = capture_install_snapshot(home, &app_id)?;
+        reinstall_from_meta(home, merged, cli_verbose)?;
+        let id = new_action_id();
+        append_audit(
+            home,
+            &AuditEntry {
+                id: id.clone(),
+                ts: audit_unix_ts(),
+                kind: "update".into(),
+                summary: format!("update {app}"),
+                app: Some(app_id.clone()),
+                undoable: true,
+            },
+            record_history,
+        )?;
+        push_undo_frame(
+            home,
+            UndoFrame {
+                id,
+                ts: audit_unix_ts(),
+                summary: format!("update {app}"),
+                items: vec![UndoItem::RestoreSnapshot {
+                    app_id,
+                    snapshot_dir,
+                }],
+            },
+            record_history,
+        )?;
+        return Ok(());
     }
 
     fs::create_dir_all(&layout.repo_dir)?;
@@ -175,8 +209,9 @@ pub(crate) fn install_app(
     )?;
 
     let executable_rel = detect_executable_rel(&layout.repo_dir, &spec)?;
+    let app_id = layout.id.clone();
     let metadata = InstallMetadata {
-        app: layout.id,
+        app: app_id.clone(),
         source_url,
         executable_rel,
         strategy: strategy.as_str().to_string(),
@@ -186,13 +221,65 @@ pub(crate) fn install_app(
     };
     crate::io::write_toml(&layout.meta_file, &metadata)?;
     hooks::run_post_install_hook(&layout.repo_dir)?;
+    let id = new_action_id();
+    append_audit(
+        home,
+        &AuditEntry {
+            id: id.clone(),
+            ts: audit_unix_ts(),
+            kind: "install".into(),
+            summary: format!("install {app}"),
+            app: Some(app_id.clone()),
+            undoable: true,
+        },
+        record_history,
+    )?;
+    push_undo_frame(
+        home,
+        UndoFrame {
+            id,
+            ts: audit_unix_ts(),
+            summary: format!("install {app}"),
+            items: vec![UndoItem::FreshInstall { app_id }],
+        },
+        record_history,
+    )?;
     Ok(())
 }
 
-pub(crate) fn reinstall_app(home: &Path, app: &str, cli_verbose: bool) -> Result<()> {
+pub(crate) fn reinstall_app(home: &Path, app: &str, cli_verbose: bool, record_history: bool) -> Result<()> {
     let layout = resolve_installed_layout(home, app)?;
     let meta: InstallMetadata = read_toml(&layout.meta_file)?;
-    reinstall_from_meta(home, meta, cli_verbose)
+    let app_id = meta.app.clone();
+    let snapshot_dir = capture_install_snapshot(home, &app_id)?;
+    reinstall_from_meta(home, meta, cli_verbose)?;
+    let id = new_action_id();
+    append_audit(
+        home,
+        &AuditEntry {
+            id: id.clone(),
+            ts: audit_unix_ts(),
+            kind: "reinstall".into(),
+            summary: format!("reinstall {app}"),
+            app: Some(app_id.clone()),
+            undoable: true,
+        },
+        record_history,
+    )?;
+    push_undo_frame(
+        home,
+        UndoFrame {
+            id,
+            ts: audit_unix_ts(),
+            summary: format!("reinstall {app}"),
+            items: vec![UndoItem::RestoreSnapshot {
+                app_id,
+                snapshot_dir,
+            }],
+        },
+        record_history,
+    )?;
+    Ok(())
 }
 
 pub(crate) fn show_package(home: &Path, app: &str, would_remove: bool) -> Result<()> {
@@ -234,8 +321,13 @@ fn list_files_under(root: &Path) -> Result<Vec<PathBuf>> {
     Ok(out)
 }
 
-pub(crate) fn self_update(home: &Path, app: &str, cli_verbose: bool) -> Result<()> {
-    install_app(home, app, None, cli_verbose)?;
+pub(crate) fn self_update(
+    home: &Path,
+    app: &str,
+    cli_verbose: bool,
+    record_history: bool,
+) -> Result<()> {
+    install_app(home, app, None, cli_verbose, false)?;
 
     let layout = resolve_layout_for_run(home, app);
     let metadata: InstallMetadata = read_toml(&layout.meta_file)?;
@@ -249,7 +341,20 @@ pub(crate) fn self_update(home: &Path, app: &str, cli_verbose: bool) -> Result<(
 
     let current_executable =
         std::env::current_exe().context("failed to locate current executable")?;
-    replace_current_executable(&current_executable, &new_executable)
+    replace_current_executable(&current_executable, &new_executable)?;
+    append_audit(
+        home,
+        &AuditEntry {
+            id: new_action_id(),
+            ts: audit_unix_ts(),
+            kind: "self-update".into(),
+            summary: format!("self-update {app}"),
+            app: Some(metadata.app.clone()),
+            undoable: false,
+        },
+        record_history,
+    )?;
+    Ok(())
 }
 
 fn staged_replacement_path(current_executable: &Path) -> std::path::PathBuf {
@@ -320,12 +425,25 @@ fn powershell_quote(input: &str) -> String {
     input.replace('\'', "''")
 }
 
-pub(crate) fn uninstall_app(home: &Path, app: &str) -> Result<()> {
+pub(crate) fn uninstall_app(home: &Path, app: &str, record_history: bool) -> Result<()> {
     let layout = resolve_layout_for_run(home, app);
     let app_root = layout
         .repo_dir
         .parent()
         .ok_or_else(|| anyhow!("invalid app layout for {}", layout.id))?;
+
+    append_audit(
+        home,
+        &AuditEntry {
+            id: new_action_id(),
+            ts: audit_unix_ts(),
+            kind: "uninstall".into(),
+            summary: format!("uninstall {app}"),
+            app: Some(layout.id.clone()),
+            undoable: false,
+        },
+        record_history,
+    )?;
 
     if app_root.exists() {
         fs::remove_dir_all(app_root)
@@ -334,22 +452,64 @@ pub(crate) fn uninstall_app(home: &Path, app: &str) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn update_all(home: &Path, cli_verbose: bool) -> Result<()> {
+pub(crate) fn update_all(home: &Path, cli_verbose: bool, record_history: bool) -> Result<()> {
     let apps_root = home.join("apps");
     if !apps_root.exists() {
         return Ok(());
     }
 
+    let mut plan: Vec<(InstallMetadata, PathBuf)> = Vec::new();
     for entry in fs::read_dir(&apps_root)? {
-        let meta = entry?.path().join("install.toml");
-        if !meta.exists() {
+        let meta_path = entry?.path().join("install.toml");
+        if !meta_path.exists() {
             continue;
         }
 
-        let install: InstallMetadata = read_toml(&meta)?;
-        reinstall_from_meta(home, install, cli_verbose)?;
+        let install: InstallMetadata = read_toml(&meta_path)?;
+        let snapshot_dir = capture_install_snapshot(home, &install.app)?;
+        plan.push((install, snapshot_dir));
+    }
+    plan.sort_by(|a, b| a.0.app.cmp(&b.0.app));
+
+    for (install, _) in &plan {
+        reinstall_from_meta(home, install.clone(), cli_verbose)?;
     }
 
+    if plan.is_empty() {
+        return Ok(());
+    }
+
+    let n = plan.len();
+    let items: Vec<UndoItem> = plan
+        .into_iter()
+        .map(|(i, snap)| UndoItem::RestoreSnapshot {
+            app_id: i.app,
+            snapshot_dir: snap,
+        })
+        .collect();
+    let id = new_action_id();
+    append_audit(
+        home,
+        &AuditEntry {
+            id: id.clone(),
+            ts: audit_unix_ts(),
+            kind: "update-all".into(),
+            summary: format!("update all ({n} apps)"),
+            app: None,
+            undoable: true,
+        },
+        record_history,
+    )?;
+    push_undo_frame(
+        home,
+        UndoFrame {
+            id,
+            ts: audit_unix_ts(),
+            summary: format!("update all ({n} apps)"),
+            items,
+        },
+        record_history,
+    )?;
     Ok(())
 }
 
