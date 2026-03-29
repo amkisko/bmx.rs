@@ -1,0 +1,36 @@
+name: Bug Report
+description: Create a report to help us improve.
+title: "[Bug]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: "Please verify details and include exact reproduction steps."
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What happened and what did you expect instead?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction Steps
+      placeholder: "1. Run ...\n2. Observe ..."
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, shell, BMX version, toolchain versions
+    validations:
+      required: true
+  - type: checkboxes
+    id: automation_check
+    attributes:
+      label: Safety
+      options:
+        - label: I confirm this report contains no secrets, keys, or PII.
+          required: true

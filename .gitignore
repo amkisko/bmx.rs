@@ -1,0 +1,17 @@
+# Rust / Cargo
+/target/
+
+# Coverage artifacts (cargo-llvm-cov / llvm)
+*.profraw
+*.profdata
+/coverage.txt
+/coverage.json
+/lcov.info
+/html/
+
+# Editor / OS noise
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo

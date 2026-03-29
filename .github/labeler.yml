@@ -1,0 +1,18 @@
+feature:
+  - head-branch: ["^feature", "feature"]
+patch:
+  - head-branch: ["^patch", "patch"]
+release:
+  - base-branch: main
+github config:
+  - changed-files:
+      - any-glob-to-any-file: .github/**
+rust:
+  - changed-files:
+      - any-glob-to-any-file: "**/*.rs"
+documentation:
+  - changed-files:
+      - any-glob-to-any-file: ["**/*.md", "SPEC.md"]
+setup:
+  - changed-files:
+      - any-glob-to-any-file: ["setup.sh", ".editorconfig", ".gitignore"]

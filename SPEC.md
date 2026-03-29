@@ -1,0 +1,138 @@
+# BMX Specification
+
+## Overview
+
+bmx is a language-agnostic CLI that installs, builds, and runs software from source repositories. Invoking `bmx <app-or-repo>` installs if needed and runs the app; all managed state lives in a local cache under the user’s home directory.
+
+Commands: `bmx <app> [-- …]` (optional `--rm`, `--pin`, `-v` / `--verbose`); `bmx exec <app> [-- …]` or `bmx exec --pin` when `.bmx/pin` defines the app; `bmx install [--as NAME]|uninstall|reinstall|self-update|update`; `bmx show <app> [--would-remove]`; `bmx history [-n N]`; `bmx undo [ID] [--only APP]`; `bmx source set-default|show`; `bmx isolation set-default|show`; `bmx checkout set-default|show`; `bmx shim init|path|add`; `bmx doctor`.
+
+bmx is not a language-specific package manager: no `package.json`, npm client, or bundled JavaScript runtime. Optional `[registries]` entries in `config.toml` are git URL aliases only, not npm/gem/cargo indices.
+
+Not in this version: multi-version side-by-side management, a shared compile cache across apps, strong security sandboxing, parallel mass updates, or pluggable registry protocols beyond static URL prefixes in config.
+
+## State layout and configuration file
+
+Everything is under `~/.bmx`: `config.toml`, `apps/<app-id>/repo/`, and `apps/<app-id>/install.toml`. Optional: `audit.log.jsonl` (append-only action log), `undo-stack.json` (last undoable operations, capped), and `snapshots/` (files captured before mutating installs).
+
+```toml
+default_source = "https://github.com"
+build_isolation = "off"           # off | auto | docker | podman | nerdctl
+checkout_backend = "git"       # git | gh | custom (git2 still accepted as legacy alias)
+checkout_profiles = []
+integrity_check = false           # if true, run/exec compare live HEAD to install.toml
+
+[registries]
+# corp = "https://git.corp.example"   # bmx install corp:widgets -> that URL.git
+```
+
+```toml
+app = "ripgrep"
+source_url = "https://github.com/BurntSushi/ripgrep.git"
+executable_rel = "target/release/rg"
+strategy = "rust-cargo"
+requested_ref = "^1.0"
+resolved_commit = "7f3d5c1..."
+```
+
+## Source resolution and checkout
+
+An app argument may be a repo URL, a repository path form, a bare name (combined with `default_source` as `<default>/<name>.git`), or `name@ref` where ref is a tag, semver range, or SHA. For **URL-like** sources (`…://…`, `git@…`), or short **`owner/repo`** paths (with at least one `/`), you may append `:cargo_package` before an optional `@ref` (examples: `https://github.com/org/proj.rs:my-bin@main`, `org/proj.rs:my-bin` with `default_source = "https://github.com"`) to select a Cargo workspace member: the clone URL omits that suffix, installs use a distinct app id `{repo_id}__{package}`, Rust builds run `cargo build --release -p <package>`, and the release binary for that package is preferred. This does not apply to bare single-segment names or `registry_key:repo` forms that contain no `/` before the package suffix (so `corp:widgets` stays a registry key, not `corp` + package `widgets`).
+
+Checkout and sync use `checkout_backend` in config. Default is `git` (system `git` for clone, fetch, checkout). Older configs may still say `git2`; it means the same thing. `[[checkout_profiles]]` can match `match_prefix` on the resolved URL and override backend, SSH, env, proxy, or custom clone/sync commands.
+
+## Install, run, and updates
+
+Install resolves the source, clones or syncs the cache, checks out the requested revision when present, detects build strategy, runs the build, discovers the executable, and writes `install.toml`. Run installs when needed, reinstalls when the requested ref no longer matches metadata, runs the cached binary, and forwards its exit code. Uninstall removes `~/.bmx/apps/<app-id>/`. `bmx update [app]` with **no** `app` argument runs `sync + checkout + build` for every `install.toml` under `apps/`; with an app argument it does the same for that install only. Self-update builds from a given source and replaces the running `bmx` binary (see platform notes below).
+
+`bmx install APP --as NAME` stores the install under `apps/<NAME>/` and records `app = "<NAME>"` in `install.toml`. Use this when two different sources would map to the same default id, or when you want a second checkout of the same repo. Installing into an existing directory with a **different** resolved `source_url` fails with a hint to pick another `--as` or uninstall first.
+
+`bmx reinstall APP` re-fetches, re-checks out per `install.toml`, and rebuilds **without** deleting the cache directory (developer workflow after local edits in the clone).
+
+`bmx show APP` lists files under the cached repository (`apps/<id>/repo/`). `bmx show APP --would-remove` lists all paths that `bmx uninstall APP` would delete (including `install.toml`). The global `--rm` flag still means ephemeral `BMX_HOME` only; prefer `--would-remove` for uninstall previews.
+
+## History and undo
+
+`bmx history` prints recent entries from `audit.log.jsonl` (id, unix time, kind, undoable flag, summary). **`--rm` runs do not write** history or undo data (ephemeral home only).
+
+**Undoable** steps record a marker in `undo-stack.json` and (for mutations of existing installs) a directory under `snapshots/` holding the previous `install.toml` and `git_head.txt` (HEAD before the operation):
+
+- Fresh **`install`**: undo removes `apps/<id>/` entirely.
+- **`update`**, **`reinstall`**, **`install`** that refreshes an existing app, or **`update` with no app** (`update all`): undo restores saved metadata, `git checkout --force` to the saved commit when available, and rebuilds **without** fetching.
+
+**`bmx undo`** reverses the **top** frame on the stack. **`bmx undo <id>`** reverses the frame with that id only if it **is** the top frame (undo newer steps first). **`bmx undo --only <app>`** (same app forms as `bmx install`) rolls back **one** install from the top frame only—useful after **`bmx update`** touched every app: other apps from that batch stay updated until you `bmx undo --only` them too or run **`bmx undo`** to revert the rest at once. Partial undo does not apply to a lone fresh **`install`** frame (use full **`bmx undo`**). Uninstall and self-update are logged with `undoable: false` (no automatic rollback). The stack is capped (oldest frames and their snapshot dirs are dropped).
+
+With `--rm`, bmx uses a throwaway temp directory as `BMX_HOME` (default-shaped config only; the real `~/.bmx` is not read) and deletes it after the command—useful for one-off runs without touching the persistent cache.
+
+With global `--pin`, the app spec is read from the first `<project>/.bmx/pin` found by walking parents from the working directory; the file is one non-empty line with the same spec you would pass to `bmx install`.
+
+The child process gets `PATH` with the managed executable’s directory prepended so the binary bmx selected wins over a same-named program elsewhere.
+
+With `-v` / `--verbose`, bmx logs the canonical executable path, app id, and `resolved_commit` to stderr before launch.
+
+## Builds, workdir, executable, hooks, and shims
+
+Build stacks are implemented as an internal **plugin** registry (Rust, CMake, AUR, Homebrew, Make) tried in that detection order. Repository root may include `bmx.toml` with `[bmx] strategy = "<id>"` where `<id>` is `rust-cargo`, `cmake`, `make`, `homebrew`, or `aur`, to **force** a plugin instead of auto-detect (still uses the same `workdir` rules below).
+
+Rust uses `cargo build --release`, or `cargo build --release -p <name>` when the app spec includes `:name`; CMake uses configure + build in `build/` with Release; Make uses `make -j`; Homebrew uses `brew bundle` or `--build-from-source`; AUR prefers yay/paru else `makepkg`.
+
+Repository root may contain `bmx.toml` with `[bmx] workdir` (relative, no `..`, must exist under the repo); detection and build run from that subdirectory. Optional `run` sets the executable path explicitly; otherwise Rust tries `target/release/<cargo_package_or_app_id_with_underscores>`, then scan `build/`, `bin/`, `target/release/`. Paths in metadata are relative to repo root even when `workdir` is set.
+
+Optional `[bmx.hooks]`: `pre_run` runs from repo root before launching the installed binary; `post_install` runs after a successful install/reinstall.
+
+`bmx shim init` creates `~/.bmx/shims`; `bmx shim path` prints a POSIX `PATH` export line; `bmx shim add <app>` adds a small stub that calls `bmx exec` with an absolute path to the current `bmx` binary. Shim generation is Unix-only; on Windows use `bmx` / `bmx.exe` directly.
+
+```toml
+[bmx]
+workdir = "path/to/subdir"
+run = "path/to/executable"
+# strategy = "make"
+
+[bmx.hooks]
+pre_run = "echo warmup"
+post_install = "./tooling/post-install.sh"
+```
+
+## Build isolation
+
+`config.toml` sets persistent isolation: `off` (host build), `auto` (try docker, then podman, then nerdctl), or a specific backend. When enabled, installs and updates run in the container until the setting changes. Image comes from `BMX_ISOLATION_IMAGE` or defaults to `ghcr.io/catthehacker/ubuntu:full-latest`. That default is Linux-oriented; artifacts may not run on macOS/Windows hosts without a matching target strategy.
+
+## Checkout backends and profiles
+
+Backends: `git` uses the system git CLI; `gh` uses `gh repo clone` then git; `custom` uses profile-defined commands. Templates may use `{source_url}` and `{repo_dir}`.
+
+```toml
+checkout_backend = "git"
+
+[[checkout_profiles]]
+name = "github-corp"
+match_prefix = "https://github.com/acme/"
+backend = "git"
+ssh_command = "ssh -i ~/.ssh/acme_id -o IdentitiesOnly=yes"
+https_proxy = "http://proxy.local:8443"
+no_proxy = "localhost,127.0.0.1,.internal"
+
+[[checkout_profiles.env]]
+key = "GH_TOKEN"
+value = "ghp_example_token"
+
+[[checkout_profiles]]
+name = "legacy-vcs-bridge"
+match_prefix = "ssh://legacy.example.com/"
+backend = "custom"
+custom_clone = "my-checkout clone {source_url} {repo_dir}"
+custom_sync = "my-checkout sync {repo_dir}"
+```
+
+## Self-update on disk
+
+Unix: stage the new binary and rename it over the current executable. Windows: replacement of the running exe is deferred until after exit, then applied.
+
+## Errors, security, doctor, and future work
+
+Errors should be actionable for resolution, sync, build, executable detection, and missing tools. Preserve cache directories except when uninstall removes an app.
+
+The trust model is explicit: third-party source is checked out and built on the machine. Harder guarantees (signatures, allowlists, sandboxed execution, deterministic isolation) are future work.
+
+`bmx doctor` summarizes home path, checkout backend note, default source, isolation mode, `integrity_check`, registry count, `git --version` when present, approximate size under `apps/`, installs that look broken, and common build-tool availability.
+
+Near-term direction: more integration coverage, clearer reproducibility for last-installed revisions, richer executable resolution from ecosystem metadata. Parallel batch updates and shared cross-app caches remain unimplemented.
