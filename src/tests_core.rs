@@ -161,6 +161,10 @@ fn build_strategy_labels_are_stable() {
     assert_eq!(BuildStrategy::Make.as_str(), "make");
     assert_eq!(BuildStrategy::Homebrew.as_str(), "homebrew");
     assert_eq!(BuildStrategy::Aur.as_str(), "aur");
+
+    assert_eq!(BuildStrategy::parse("rust-cargo"), Some(BuildStrategy::RustCargo));
+    assert_eq!(BuildStrategy::parse("make"), Some(BuildStrategy::Make));
+    assert_eq!(BuildStrategy::parse("not-a-strategy"), None);
 }
 
 #[test]

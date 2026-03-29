@@ -9,24 +9,178 @@ use crate::isolation::run_build_checked;
 use crate::process::has_tool;
 use crate::types::{BMXManifest, BuildIsolation, BuildStrategy};
 
+/// Build plugins implement detection and compilation for a stack (Rust, CMake, …).
+pub(crate) trait BuildPlugin: Sync {
+    fn strategy(&self) -> BuildStrategy;
+    fn detect(&self, build_dir: &Path) -> bool;
+    fn build(
+        &self,
+        repo_dir: &Path,
+        build_dir: &Path,
+        isolation: BuildIsolation,
+        show_output: bool,
+        rust_package: Option<&str>,
+    ) -> Result<()>;
+}
+
+struct RustCargoPlugin;
+impl BuildPlugin for RustCargoPlugin {
+    fn strategy(&self) -> BuildStrategy {
+        BuildStrategy::RustCargo
+    }
+    fn detect(&self, build_dir: &Path) -> bool {
+        build_dir.join("Cargo.toml").exists()
+    }
+    fn build(
+        &self,
+        _repo_dir: &Path,
+        build_dir: &Path,
+        isolation: BuildIsolation,
+        show_output: bool,
+        rust_package: Option<&str>,
+    ) -> Result<()> {
+        if let Some(pkg) = rust_package {
+            run_build_checked(
+                build_dir,
+                "cargo",
+                &["build", "--release", "-p", pkg],
+                isolation,
+                show_output,
+            )
+        } else {
+            run_build_checked(
+                build_dir,
+                "cargo",
+                &["build", "--release"],
+                isolation,
+                show_output,
+            )
+        }
+    }
+}
+
+struct CMakePlugin;
+impl BuildPlugin for CMakePlugin {
+    fn strategy(&self) -> BuildStrategy {
+        BuildStrategy::CMake
+    }
+    fn detect(&self, build_dir: &Path) -> bool {
+        build_dir.join("CMakeLists.txt").exists()
+    }
+    fn build(
+        &self,
+        _repo_dir: &Path,
+        build_dir: &Path,
+        isolation: BuildIsolation,
+        show_output: bool,
+        _rust_package: Option<&str>,
+    ) -> Result<()> {
+        run_build_checked(
+            build_dir,
+            "cmake",
+            &["-S", ".", "-B", "build", "-DCMAKE_BUILD_TYPE=Release"],
+            isolation,
+            show_output,
+        )?;
+        run_build_checked(
+            build_dir,
+            "cmake",
+            &["--build", "build", "--config", "Release"],
+            isolation,
+            show_output,
+        )
+    }
+}
+
+struct AurPlugin;
+impl BuildPlugin for AurPlugin {
+    fn strategy(&self) -> BuildStrategy {
+        BuildStrategy::Aur
+    }
+    fn detect(&self, build_dir: &Path) -> bool {
+        build_dir.join("PKGBUILD").exists()
+    }
+    fn build(
+        &self,
+        _repo_dir: &Path,
+        build_dir: &Path,
+        isolation: BuildIsolation,
+        show_output: bool,
+        _rust_package: Option<&str>,
+    ) -> Result<()> {
+        build_aur(build_dir, isolation, show_output)
+    }
+}
+
+struct HomebrewPlugin;
+impl BuildPlugin for HomebrewPlugin {
+    fn strategy(&self) -> BuildStrategy {
+        BuildStrategy::Homebrew
+    }
+    fn detect(&self, build_dir: &Path) -> bool {
+        build_dir.join("Brewfile").exists() || has_formula_file(build_dir)
+    }
+    fn build(
+        &self,
+        _repo_dir: &Path,
+        build_dir: &Path,
+        isolation: BuildIsolation,
+        show_output: bool,
+        _rust_package: Option<&str>,
+    ) -> Result<()> {
+        build_homebrew(build_dir, isolation, show_output)
+    }
+}
+
+struct MakePlugin;
+impl BuildPlugin for MakePlugin {
+    fn strategy(&self) -> BuildStrategy {
+        BuildStrategy::Make
+    }
+    fn detect(&self, build_dir: &Path) -> bool {
+        build_dir.join("Makefile").exists() || build_dir.join("makefile").exists()
+    }
+    fn build(
+        &self,
+        _repo_dir: &Path,
+        build_dir: &Path,
+        isolation: BuildIsolation,
+        show_output: bool,
+        _rust_package: Option<&str>,
+    ) -> Result<()> {
+        run_build_checked(build_dir, "make", &["-j"], isolation, show_output)
+    }
+}
+
+/// Ordered registry: first match wins (same rules as before this refactor).
+static BUILD_PLUGINS: &[&dyn BuildPlugin] = &[
+    &RustCargoPlugin,
+    &CMakePlugin,
+    &AurPlugin,
+    &HomebrewPlugin,
+    &MakePlugin,
+];
+
 pub(crate) fn detect_strategy(repo_dir: &Path) -> Option<BuildStrategy> {
+    let manifest_path = repo_dir.join("bmx.toml");
+    let mut forced: Option<BuildStrategy> = None;
+    if manifest_path.exists()
+        && let Ok(manifest) = read_toml::<BMXManifest>(&manifest_path)
+        && let Some(name) = manifest.bmx.as_ref().and_then(|b| b.strategy.as_deref())
+    {
+        forced = BuildStrategy::parse(name);
+    }
+
     let build_dir = manifest_workdir(repo_dir).unwrap_or_else(|_| repo_dir.to_path_buf());
-    if build_dir.join("Cargo.toml").exists() {
-        return Some(BuildStrategy::RustCargo);
+
+    if let Some(s) = forced {
+        return Some(s);
     }
-    if build_dir.join("CMakeLists.txt").exists() {
-        return Some(BuildStrategy::CMake);
-    }
-    if build_dir.join("PKGBUILD").exists() {
-        return Some(BuildStrategy::Aur);
-    }
-    if build_dir.join("Brewfile").exists() || has_formula_file(&build_dir) {
-        return Some(BuildStrategy::Homebrew);
-    }
-    if build_dir.join("Makefile").exists() || build_dir.join("makefile").exists() {
-        return Some(BuildStrategy::Make);
-    }
-    None
+
+    BUILD_PLUGINS
+        .iter()
+        .find(|p| p.detect(&build_dir))
+        .map(|p| p.strategy())
 }
 
 pub(crate) fn build_with_strategy(
@@ -37,48 +191,11 @@ pub(crate) fn build_with_strategy(
     rust_package: Option<&str>,
 ) -> Result<()> {
     let build_dir = manifest_workdir(repo_dir)?;
-    match strategy {
-        BuildStrategy::RustCargo => {
-            if let Some(pkg) = rust_package {
-                run_build_checked(
-                    &build_dir,
-                    "cargo",
-                    &["build", "--release", "-p", pkg],
-                    isolation,
-                    show_output,
-                )
-            } else {
-                run_build_checked(
-                    &build_dir,
-                    "cargo",
-                    &["build", "--release"],
-                    isolation,
-                    show_output,
-                )
-            }
-        }
-        BuildStrategy::CMake => {
-            run_build_checked(
-                &build_dir,
-                "cmake",
-                &["-S", ".", "-B", "build", "-DCMAKE_BUILD_TYPE=Release"],
-                isolation,
-                show_output,
-            )?;
-            run_build_checked(
-                &build_dir,
-                "cmake",
-                &["--build", "build", "--config", "Release"],
-                isolation,
-                show_output,
-            )
-        }
-        BuildStrategy::Make => {
-            run_build_checked(&build_dir, "make", &["-j"], isolation, show_output)
-        }
-        BuildStrategy::Homebrew => build_homebrew(&build_dir, isolation, show_output),
-        BuildStrategy::Aur => build_aur(&build_dir, isolation, show_output),
-    }
+    let plugin = BUILD_PLUGINS
+        .iter()
+        .find(|p| &p.strategy() == strategy)
+        .ok_or_else(|| anyhow!("internal error: unknown strategy {:?}", strategy))?;
+    plugin.build(repo_dir, &build_dir, isolation, show_output, rust_package)
 }
 
 fn build_homebrew(

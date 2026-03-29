@@ -34,7 +34,10 @@ pub(crate) enum Commands {
         #[arg(num_args = 0.., allow_hyphen_values = true)]
         args: Vec<String>,
     },
+    /// Install under ~/.bmx/apps/<NAME>/ when you need a unique id (two repos that share the same default slot, or a second copy of the same source).
     Install {
+        #[arg(long = "as", value_name = "NAME")]
+        install_as: Option<String>,
         app: String,
     },
     Uninstall {
@@ -46,8 +49,15 @@ pub(crate) enum Commands {
     SelfUpdate {
         app: String,
     },
+    /// Rebuild from the cached clone: one app, or every install when APP is omitted (`bmx install` is sync+build; this is the same for all apps).
     Update {
         app: Option<String>,
+    },
+    /// Print files under the install’s checkout, or with --would-remove the paths `bmx uninstall` would delete.
+    Show {
+        #[arg(long = "would-remove", help = "Dry run: list paths that uninstall would remove")]
+        would_remove: bool,
+        app: String,
     },
     Source {
         #[command(subcommand)]

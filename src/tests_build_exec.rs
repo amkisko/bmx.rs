@@ -77,6 +77,22 @@ fn detect_strategy_covers_all_markers_and_none() {
 }
 
 #[test]
+fn detect_strategy_honors_bmx_toml_strategy_override() {
+    let repo = TempDir::new().expect("tmp");
+    fs::write(
+        repo.path().join("bmx.toml"),
+        "[bmx]\nstrategy = \"make\"\n",
+    )
+    .expect("manifest");
+    fs::write(repo.path().join("Cargo.toml"), "[package]\nname='x'\n").expect("cargo");
+    fs::write(repo.path().join("Makefile"), "all:\n\t@true\n").expect("make");
+    assert!(matches!(
+        detect_strategy(repo.path()),
+        Some(BuildStrategy::Make)
+    ));
+}
+
+#[test]
 fn detect_strategy_honors_bmx_workdir() {
     let repo = TempDir::new().expect("tmp");
     fs::create_dir_all(repo.path().join("tooling")).expect("mkdir");

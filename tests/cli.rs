@@ -375,3 +375,51 @@ fn debug_mode_shows_command_logs() {
             "[bmx][debug] run_checked: make -j",
         ));
 }
+
+#[test]
+fn show_lists_repo_files_and_would_remove_includes_install_metadata() {
+    let home = TempDir::new().expect("home tempdir");
+    let repos = TempDir::new().expect("repos tempdir");
+    let repo = init_make_repo(repos.path(), "show-tool", "show-tool", "SHOW_OK");
+    let app = format!("file://{}", repo.display());
+
+    bmx(home.path())
+        .args(["install", "--as", "my-show", &app])
+        .assert()
+        .success();
+
+    bmx(home.path())
+        .args(["show", "my-show"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Makefile"))
+        .stdout(predicate::str::contains("bmx.toml"));
+
+    bmx(home.path())
+        .args(["show", "my-show", "--would-remove"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("install.toml"))
+        .stdout(predicate::str::contains("repo/Makefile"));
+}
+
+#[test]
+fn install_second_source_colliding_default_id_hints_as_flag() {
+    let home = TempDir::new().expect("home tempdir");
+    let repos = TempDir::new().expect("repos tempdir");
+    let r1 = init_make_repo(repos.path(), "path-a/dup-tool", "t", "A");
+    let r2 = init_make_repo(repos.path(), "path-b/dup-tool", "t", "B");
+    let app1 = format!("file://{}", r1.display());
+    let app2 = format!("file://{}", r2.display());
+
+    bmx(home.path())
+        .args(["install", &app1])
+        .assert()
+        .success();
+
+    bmx(home.path())
+        .args(["install", &app2])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("--as"));
+}

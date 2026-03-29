@@ -142,6 +142,9 @@ pub(crate) struct BMXManifest {
 pub(crate) struct BmxSection {
     pub(crate) run: Option<String>,
     pub(crate) workdir: Option<String>,
+    /// Force a build plugin id (`rust-cargo`, `cmake`, `make`, `homebrew`, `aur`) instead of auto-detect.
+    #[serde(default)]
+    pub(crate) strategy: Option<String>,
     #[serde(default)]
     pub(crate) hooks: Option<BmxHooks>,
 }
@@ -156,7 +159,7 @@ pub(crate) struct BmxHooks {
     pub(crate) post_install: Option<String>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum BuildStrategy {
     RustCargo,
     CMake,
@@ -173,6 +176,17 @@ impl BuildStrategy {
             Self::Make => "make",
             Self::Homebrew => "homebrew",
             Self::Aur => "aur",
+        }
+    }
+
+    pub(crate) fn parse(input: &str) -> Option<Self> {
+        match input {
+            "rust-cargo" => Some(Self::RustCargo),
+            "cmake" => Some(Self::CMake),
+            "make" => Some(Self::Make),
+            "homebrew" => Some(Self::Homebrew),
+            "aur" => Some(Self::Aur),
+            _ => None,
         }
     }
 }

@@ -4,7 +4,7 @@
 
 bmx is a language-agnostic CLI that installs, builds, and runs software from source repositories. Invoking `bmx <app-or-repo>` installs if needed and runs the app; all managed state lives in a local cache under the user’s home directory.
 
-Commands: `bmx <app> [-- …]` (optional `--rm`, `--pin`, `-v` / `--verbose`); `bmx exec <app> [-- …]` or `bmx exec --pin` when `.bmx/pin` defines the app; `bmx install|uninstall|reinstall|self-update|update`; `bmx source set-default|show`; `bmx isolation set-default|show`; `bmx checkout set-default|show`; `bmx shim init|path|add`; `bmx doctor`.
+Commands: `bmx <app> [-- …]` (optional `--rm`, `--pin`, `-v` / `--verbose`); `bmx exec <app> [-- …]` or `bmx exec --pin` when `.bmx/pin` defines the app; `bmx install [--as NAME]|uninstall|reinstall|self-update|update`; `bmx show <app> [--would-remove]`; `bmx source set-default|show`; `bmx isolation set-default|show`; `bmx checkout set-default|show`; `bmx shim init|path|add`; `bmx doctor`.
 
 bmx is not a language-specific package manager: no `package.json`, npm client, or bundled JavaScript runtime. Optional `[registries]` entries in `config.toml` are git URL aliases only, not npm/gem/cargo indices.
 
@@ -42,7 +42,13 @@ Checkout and sync use `checkout_backend` in config. Default is `git` (system `gi
 
 ## Install, run, and updates
 
-Install resolves the source, clones or syncs the cache, checks out the requested revision when present, detects build strategy, runs the build, discovers the executable, and writes `install.toml`. Run installs when needed, reinstalls when the requested ref no longer matches metadata, runs the cached binary, and forwards its exit code. Uninstall removes `~/.bmx/apps/<app-id>/`. `bmx update [app]` updates one app or all installed apps. Self-update builds from a given source and replaces the running `bmx` binary (see platform notes below).
+Install resolves the source, clones or syncs the cache, checks out the requested revision when present, detects build strategy, runs the build, discovers the executable, and writes `install.toml`. Run installs when needed, reinstalls when the requested ref no longer matches metadata, runs the cached binary, and forwards its exit code. Uninstall removes `~/.bmx/apps/<app-id>/`. `bmx update [app]` with **no** `app` argument runs `sync + checkout + build` for every `install.toml` under `apps/`; with an app argument it does the same for that install only. Self-update builds from a given source and replaces the running `bmx` binary (see platform notes below).
+
+`bmx install APP --as NAME` stores the install under `apps/<NAME>/` and records `app = "<NAME>"` in `install.toml`. Use this when two different sources would map to the same default id, or when you want a second checkout of the same repo. Installing into an existing directory with a **different** resolved `source_url` fails with a hint to pick another `--as` or uninstall first.
+
+`bmx reinstall APP` re-fetches, re-checks out per `install.toml`, and rebuilds **without** deleting the cache directory (developer workflow after local edits in the clone).
+
+`bmx show APP` lists files under the cached repository (`apps/<id>/repo/`). `bmx show APP --would-remove` lists all paths that `bmx uninstall APP` would delete (including `install.toml`). The global `--rm` flag still means ephemeral `BMX_HOME` only; prefer `--would-remove` for uninstall previews.
 
 With `--rm`, bmx uses a throwaway temp directory as `BMX_HOME` (default-shaped config only; the real `~/.bmx` is not read) and deletes it after the command—useful for one-off runs without touching the persistent cache.
 
@@ -54,7 +60,9 @@ With `-v` / `--verbose`, bmx logs the canonical executable path, app id, and `re
 
 ## Builds, workdir, executable, hooks, and shims
 
-Strategy detection order: `Cargo.toml` (Rust), `CMakeLists.txt`, `PKGBUILD`, `Brewfile` or root `.rb` formula, then `Makefile` / `makefile`. Rust uses `cargo build --release`, or `cargo build --release -p <name>` when the app spec includes `:name`; CMake uses configure + build in `build/` with Release; Make uses `make -j`; Homebrew uses `brew bundle` or `--build-from-source`; AUR prefers yay/paru else `makepkg`.
+Build stacks are implemented as an internal **plugin** registry (Rust, CMake, AUR, Homebrew, Make) tried in that detection order. Repository root may include `bmx.toml` with `[bmx] strategy = "<id>"` where `<id>` is `rust-cargo`, `cmake`, `make`, `homebrew`, or `aur`, to **force** a plugin instead of auto-detect (still uses the same `workdir` rules below).
+
+Rust uses `cargo build --release`, or `cargo build --release -p <name>` when the app spec includes `:name`; CMake uses configure + build in `build/` with Release; Make uses `make -j`; Homebrew uses `brew bundle` or `--build-from-source`; AUR prefers yay/paru else `makepkg`.
 
 Repository root may contain `bmx.toml` with `[bmx] workdir` (relative, no `..`, must exist under the repo); detection and build run from that subdirectory. Optional `run` sets the executable path explicitly; otherwise Rust tries `target/release/<cargo_package_or_app_id_with_underscores>`, then scan `build/`, `bin/`, `target/release/`. Paths in metadata are relative to repo root even when `workdir` is set.
 
@@ -66,6 +74,7 @@ Optional `[bmx.hooks]`: `pre_run` runs from repo root before launching the insta
 [bmx]
 workdir = "path/to/subdir"
 run = "path/to/executable"
+# strategy = "make"
 
 [bmx.hooks]
 pre_run = "echo warmup"

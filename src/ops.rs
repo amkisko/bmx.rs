@@ -1,11 +1,11 @@
 use std::ffi::OsString;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use anyhow::{Context, Result, anyhow};
 
-use crate::app_spec::parse_app_spec;
+use crate::app_spec::{AppSpec, layout_id, parse_app_spec};
 use crate::build::{build_with_strategy, detect_strategy};
 use crate::config::load_config;
 use crate::executable::detect_executable_rel;
@@ -13,22 +13,33 @@ use crate::hooks;
 use crate::install_flow::{must_reinstall, reinstall_from_meta};
 use crate::integrity::verify_repo_matches_metadata;
 use crate::io::read_toml;
-use crate::layout::app_layout_from_spec;
+use crate::layout::{
+    app_layout_for_id, resolve_installed_layout, resolve_layout_for_run, sanitize_install_as,
+};
 use crate::process::{forward_exit, has_tool};
 use crate::repo::sync_repo;
 use crate::revision::checkout_requested_ref;
 use crate::runtime::subprocess_output_visible;
 use crate::source::resolve_source;
-use crate::types::InstallMetadata;
+use crate::types::{Config, InstallMetadata};
+
+fn install_refers_to_existing(cfg: &Config, spec: &AppSpec, existing: &InstallMetadata) -> Result<bool> {
+    if spec.source == existing.app {
+        return Ok(true);
+    }
+    let resolved = resolve_source(cfg, &spec.source)?;
+    Ok(resolved == existing.source_url)
+}
 
 pub(crate) fn run_app(home: &Path, app: &str, args: &[String], verbose: bool) -> Result<()> {
     let spec = parse_app_spec(app);
-    let layout = app_layout_from_spec(home, &spec);
+    let layout = resolve_layout_for_run(home, app);
     if must_reinstall(&layout.meta_file, &spec.requested_ref)? {
-        install_app(home, app, verbose)?;
+        install_app(home, app, None, verbose)?;
     }
 
     let cfg = load_config(home)?;
+    let layout = resolve_layout_for_run(home, app);
     let mut metadata: InstallMetadata = read_toml(&layout.meta_file)?;
     if cfg.integrity_check {
         verify_repo_matches_metadata(&layout, &metadata)?;
@@ -39,7 +50,8 @@ pub(crate) fn run_app(home: &Path, app: &str, args: &[String], verbose: bool) ->
         .canonicalize()
         .unwrap_or_else(|_| layout.repo_dir.join(&metadata.executable_rel));
     if !executable.exists() {
-        install_app(home, app, verbose)?;
+        install_app(home, app, None, verbose)?;
+        let layout = resolve_layout_for_run(home, app);
         metadata = read_toml(&layout.meta_file)?;
         if cfg.integrity_check {
             verify_repo_matches_metadata(&layout, &metadata)?;
@@ -90,10 +102,53 @@ fn path_for_child(executable: &Path) -> Option<OsString> {
     Some(out)
 }
 
-pub(crate) fn install_app(home: &Path, app: &str, cli_verbose: bool) -> Result<()> {
+pub(crate) fn install_app(
+    home: &Path,
+    app: &str,
+    install_as: Option<&str>,
+    cli_verbose: bool,
+) -> Result<()> {
     let spec = parse_app_spec(app);
     let cfg = load_config(home)?;
-    let layout = app_layout_from_spec(home, &spec);
+    let directory_id = if let Some(a) = install_as {
+        sanitize_install_as(a)?
+    } else {
+        layout_id(&spec)
+    };
+    let layout = app_layout_for_id(home, directory_id);
+
+    if layout.meta_file.exists() {
+        let existing: InstallMetadata = read_toml(&layout.meta_file)?;
+        if let Some(a) = install_as {
+            let want = sanitize_install_as(a)?;
+            if existing.app != want {
+                anyhow::bail!(
+                    "this install is registered as `{}`, not `{}`",
+                    existing.app,
+                    want
+                );
+            }
+        }
+        if !install_refers_to_existing(&cfg, &spec, &existing)? {
+            anyhow::bail!(
+                "directory `{}` already holds an install from {}\n\
+                 hint: `bmx uninstall {}` or use `bmx install {} --as <unique-name>` for the other source",
+                layout.id,
+                existing.source_url,
+                layout.id,
+                app
+            );
+        }
+        let mut merged = existing;
+        if spec.requested_ref.is_some() {
+            merged.requested_ref = spec.requested_ref.clone();
+        }
+        if spec.cargo_package.is_some() {
+            merged.rust_package = spec.cargo_package.clone();
+        }
+        return reinstall_from_meta(home, merged, cli_verbose);
+    }
+
     fs::create_dir_all(&layout.repo_dir)?;
 
     let show_output = subprocess_output_visible(cli_verbose);
@@ -134,11 +189,55 @@ pub(crate) fn install_app(home: &Path, app: &str, cli_verbose: bool) -> Result<(
     Ok(())
 }
 
-pub(crate) fn self_update(home: &Path, app: &str, cli_verbose: bool) -> Result<()> {
-    install_app(home, app, cli_verbose)?;
+pub(crate) fn reinstall_app(home: &Path, app: &str, cli_verbose: bool) -> Result<()> {
+    let layout = resolve_installed_layout(home, app)?;
+    let meta: InstallMetadata = read_toml(&layout.meta_file)?;
+    reinstall_from_meta(home, meta, cli_verbose)
+}
 
-    let spec = parse_app_spec(app);
-    let layout = app_layout_from_spec(home, &spec);
+pub(crate) fn show_package(home: &Path, app: &str, would_remove: bool) -> Result<()> {
+    let layout = resolve_installed_layout(home, app)?;
+    let app_root = layout
+        .repo_dir
+        .parent()
+        .ok_or_else(|| anyhow!("invalid app layout for {}", layout.id))?;
+    let root = if would_remove {
+        app_root
+    } else {
+        &layout.repo_dir
+    };
+    let files = list_files_under(root)?;
+    for rel in files {
+        println!("{}", rel.display());
+    }
+    Ok(())
+}
+
+fn list_files_under(root: &Path) -> Result<Vec<PathBuf>> {
+    let mut out = Vec::new();
+    fn walk(dir: &Path, base: &Path, out: &mut Vec<PathBuf>) -> Result<()> {
+        for e in fs::read_dir(dir)? {
+            let p = e?.path();
+            if p.is_dir() {
+                walk(&p, base, out)?;
+            } else {
+                let rel = p.strip_prefix(base).unwrap_or(&p).to_path_buf();
+                out.push(rel);
+            }
+        }
+        Ok(())
+    }
+    if root.is_dir() {
+        walk(root, root, &mut out)?;
+    }
+    out.sort();
+    Ok(out)
+}
+
+pub(crate) fn self_update(home: &Path, app: &str, cli_verbose: bool) -> Result<()> {
+    install_app(home, app, None, cli_verbose)?;
+
+    let layout = resolve_layout_for_run(home, app);
     let metadata: InstallMetadata = read_toml(&layout.meta_file)?;
     let new_executable = layout.repo_dir.join(&metadata.executable_rel);
     if !new_executable.exists() {
@@ -192,7 +291,7 @@ fn replace_current_executable(current_executable: &Path, new_executable: &Path) 
                 staged.display()
             )
         })?;
-        return Ok(());
+        Ok(())
     }
 
     #[cfg(windows)]
@@ -222,8 +321,7 @@ fn powershell_quote(input: &str) -> String {
 }
 
 pub(crate) fn uninstall_app(home: &Path, app: &str) -> Result<()> {
-    let spec = parse_app_spec(app);
-    let layout = app_layout_from_spec(home, &spec);
+    let layout = resolve_layout_for_run(home, app);
     let app_root = layout
         .repo_dir
         .parent()

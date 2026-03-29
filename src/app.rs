@@ -7,7 +7,8 @@ use crate::cli::{
 };
 use crate::config::{load_config, save_config};
 use crate::ops::{
-    doctor, install_app, run_app, self_update, uninstall_app, update_all,
+    doctor, install_app, reinstall_app, run_app, self_update, show_package, uninstall_app,
+    update_all,
 };
 use crate::source::normalize_source_base;
 use crate::types::{BuildIsolation, CheckoutBackend};
@@ -25,8 +26,8 @@ pub(crate) fn dispatch(cli: Cli, home: &Path) -> Result<()> {
             };
             run_app(home, &spec, &args, cli.verbose)
         }
-        Some(Commands::Install { app }) => {
-            install_app(home, &app, cli.verbose)?;
+        Some(Commands::Install { app, install_as }) => {
+            install_app(home, &app, install_as.as_deref(), cli.verbose)?;
             println!("installed {app}");
             Ok(())
         }
@@ -36,8 +37,7 @@ pub(crate) fn dispatch(cli: Cli, home: &Path) -> Result<()> {
             Ok(())
         }
         Some(Commands::Reinstall { app }) => {
-            uninstall_app(home, &app)?;
-            install_app(home, &app, cli.verbose)?;
+            reinstall_app(home, &app, cli.verbose)?;
             println!("reinstalled {app}");
             Ok(())
         }
@@ -48,7 +48,7 @@ pub(crate) fn dispatch(cli: Cli, home: &Path) -> Result<()> {
         }
         Some(Commands::Update { app }) => match app {
             Some(app_name) => {
-                install_app(home, &app_name, cli.verbose)?;
+                install_app(home, &app_name, None, cli.verbose)?;
                 println!("updated {app_name}");
                 Ok(())
             }
@@ -75,6 +75,7 @@ pub(crate) fn dispatch(cli: Cli, home: &Path) -> Result<()> {
                 }
             }
         }
+        Some(Commands::Show { app, would_remove }) => show_package(home, &app, would_remove),
         Some(Commands::Doctor) => doctor(home),
         None => {
             let cwd = std::env::current_dir()?;
