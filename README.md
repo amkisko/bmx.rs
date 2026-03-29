@@ -25,7 +25,7 @@ Local checkout:
 Remote bootstrap (replace the URL with this repository when you publish it):
 
 ```bash
-curl -fsSL <setup.sh-url> | bash -s -- --repo https://github.com/amkisko/bmx.rs.git
+curl -fsSL https://raw.githubusercontent.com/amkisko/bmx.rs/refs/heads/main/setup.sh | bash -s -- --repo https://github.com/amkisko/bmx.rs.git
 ```
 
 User-local install without touching `/usr/local`:
