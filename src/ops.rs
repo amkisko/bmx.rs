@@ -690,6 +690,7 @@ pub(crate) fn update_all(
     Ok(())
 }
 
+#[allow(clippy::collapsible_if)]
 pub(crate) fn doctor(home: &Path) -> Result<()> {
     let cfg = load_config(home)?;
     println!("bmx home: {}", home.display());
@@ -705,10 +706,10 @@ pub(crate) fn doctor(home: &Path) -> Result<()> {
     println!("integrity_check (config): {}", cfg.integrity_check);
     println!("registries defined: {}", cfg.registries.len());
 
-    if let Ok(out) = Command::new("git").arg("--version").output()
-        && out.status.success()
-    {
-        print!("{}", String::from_utf8_lossy(&out.stdout));
+    if let Ok(out) = Command::new("git").arg("--version").output() {
+        if out.status.success() {
+            print!("{}", String::from_utf8_lossy(&out.stdout));
+        }
     }
 
     let apps = home.join("apps");
@@ -729,8 +730,10 @@ pub(crate) fn doctor(home: &Path) -> Result<()> {
                 Ok(m) => p.join("repo").join(&m.executable_rel).exists(),
                 Err(_) => false,
             };
-            if !ok && let Some(id) = p.file_name().and_then(|n| n.to_str()) {
-                broken.push(id.to_string());
+            if !ok {
+                if let Some(id) = p.file_name().and_then(|n| n.to_str()) {
+                    broken.push(id.to_string());
+                }
             }
         }
     }

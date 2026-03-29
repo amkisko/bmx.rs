@@ -16,4 +16,4 @@ Chatbot assistance may be used, but responsibility for correctness, safety, and 
 
 ## Reporting and Enforcement
 
-If you experience or observe unacceptable behavior, report it to contact@kiskolabs.com. Maintainers will review reports promptly, investigate fairly, and take appropriate action to protect the community.
+If you experience or observe unacceptable behavior, report it to [contact@kiskolabs.com](mailto:contact@kiskolabs.com). Maintainers will review reports promptly, investigate fairly, and take appropriate action to protect the community.

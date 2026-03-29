@@ -56,6 +56,7 @@ allow = false
 ```
 
 CLI helpers mutate this file:
+
 - `bmx trust list` prints human-readable trust state (global + local by default).
   - add top-level `--global` to show only global/default scope
   - add `--local` to show only local/prefix rules

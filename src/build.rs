@@ -161,14 +161,16 @@ static BUILD_PLUGINS: &[&dyn BuildPlugin] = &[
     &MakePlugin,
 ];
 
+#[allow(clippy::collapsible_if)]
 pub(crate) fn detect_strategy(repo_dir: &Path) -> Option<BuildStrategy> {
     let manifest_path = repo_dir.join("bmx.toml");
     let mut forced: Option<BuildStrategy> = None;
-    if manifest_path.exists()
-        && let Ok(manifest) = read_toml::<BMXManifest>(&manifest_path)
-        && let Some(name) = manifest.bmx.as_ref().and_then(|b| b.strategy.as_deref())
-    {
-        forced = BuildStrategy::parse(name);
+    if manifest_path.exists() {
+        if let Ok(manifest) = read_toml::<BMXManifest>(&manifest_path) {
+            if let Some(name) = manifest.bmx.as_ref().and_then(|b| b.strategy.as_deref()) {
+                forced = BuildStrategy::parse(name);
+            }
+        }
     }
 
     let build_dir = manifest_workdir(repo_dir).unwrap_or_else(|_| repo_dir.to_path_buf());

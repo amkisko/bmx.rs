@@ -38,7 +38,7 @@ User-local install without touching `/usr/local`:
 
 ## Usage
 
-### Build
+### Installs and rebuilds
 
 Each install lives in `~/.bmx/apps/<id>/` (`repo/` is the clone, `install.toml` is metadata). On install or first run, bmx resolves the spec (bare name, `owner/repo`, URL, `registry:repo`, `name@ref` / semver), syncs git, checks out the ref, picks a stack (Rust → CMake → Make → Homebrew → AUR), builds, then stores the executable. Per-repo `bmx.toml` can set `strategy`, `workdir`, `run`, and `[bmx.hooks]` (`pre_run`, `post_install`). Workspace members: `owner/repo.rs:crate@ref`. Host vs Docker/Podman/nerdctl: `bmx isolation`; optional `integrity_check` in `config.toml` compares live HEAD to metadata on run.
 
@@ -56,6 +56,7 @@ bmx doctor                        # home, backends, isolation, broken installs
 ```
 
 Rebuild ref behavior:
+
 - `bmx rebuild APP@version` builds that exact ref.
 - `bmx rebuild APP` uses pinned `requested_ref` when present; otherwise default/latest.
 - `--pin` is respected: with `--pin APP` it writes/updates project pins, and with `--pin` (no APP) it resolves from pins.
@@ -99,6 +100,7 @@ bmx trust check [SOURCE]
 ```
 
 `bmx trust check` audits all trusted signer keys from `~/.bmx/trust.toml` against a compromised-key feed.
+
 - `SOURCE` may be:
 - A direct `.toml` or `.txt` URL.
 - A git URL (the repository should include one of: `compromised-keys.toml`, `compromised_keys.toml`, `trust/compromised-keys.toml`, `trust/compromised_keys.toml`, or `.txt` variants).
@@ -144,12 +146,13 @@ bin/test
 `bin/test` runs formatting, linting, file-size limits, tests, and coverage gate.
 
 File size policy used by `bin/test`:
+
 - Soft limit: 150 lines (reported as `[SOFT]`).
 - Hard limit: 300 lines (fails with non-zero exit).
 
 ## Contributing
 
-Bug reports and pull requests are welcome on GitHub at https://github.com/amkisko/bmx.rs.
+Bug reports and pull requests are welcome on GitHub at [amkisko/bmx.rs](https://github.com/amkisko/bmx.rs).
 
 For questions, expectations, and how to propose changes, see [CONTRIBUTING.md](CONTRIBUTING.md). Community standards are in [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md). Release history is in [CHANGELOG.md](CHANGELOG.md); maintainer roles and decisions are described in [GOVERNANCE.md](GOVERNANCE.md).
 

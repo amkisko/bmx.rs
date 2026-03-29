@@ -176,6 +176,7 @@ fn commit_signing_fingerprint(home: &Path, source_url: &str, repo_dir: &Path) ->
         .filter(|s| !s.is_empty())
 }
 
+#[allow(clippy::collapsible_if)]
 pub(crate) fn repo_signing_keys(home: &Path, source_url: &str, repo_dir: &Path) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     if let Some(v) = commit_signing_key(home, source_url, repo_dir).map(|s| normalize_key(&s)) {
@@ -183,9 +184,10 @@ pub(crate) fn repo_signing_keys(home: &Path, source_url: &str, repo_dir: &Path) 
     }
     if let Some(v) =
         commit_signing_fingerprint(home, source_url, repo_dir).map(|s| normalize_key(&s))
-        && !out.iter().any(|x| x == &v)
     {
-        out.push(v);
+        if !out.iter().any(|x| x == &v) {
+            out.push(v);
+        }
     }
     out
 }

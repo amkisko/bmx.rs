@@ -1,7 +1,7 @@
 feature:
-  - head-branch: ["^feature", "feature"]
+  - head-branch: [^feature, feature]
 patch:
-  - head-branch: ["^patch", "patch"]
+  - head-branch: [^patch, patch]
 release:
   - base-branch: main
 github config:
@@ -12,7 +12,7 @@ rust:
       - any-glob-to-any-file: "**/*.rs"
 documentation:
   - changed-files:
-      - any-glob-to-any-file: ["**/*.md", "SPEC.md"]
+      - any-glob-to-any-file: ["**/*.md", SPEC.md]
 setup:
   - changed-files:
-      - any-glob-to-any-file: ["setup.sh", ".editorconfig", ".gitignore"]
+      - any-glob-to-any-file: [setup.sh, .editorconfig, .gitignore]

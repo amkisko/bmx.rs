@@ -13,11 +13,11 @@ path = "src/main.rs"
 [dependencies]
 anyhow = "1"
 clap = { version = "4", default-features = false, features = [
-    "std",
-    "help",
-    "usage",
-    "error-context",
-    "derive",
+  "std",
+  "help",
+  "usage",
+  "error-context",
+  "derive",
 ] }
 semver = "1"
 serde = { version = "1", features = ["derive"] }

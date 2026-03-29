@@ -22,16 +22,17 @@ pub(crate) struct PinsFile {
 }
 
 /// Resolve which spec to run for `bmx --pin` / `bmx exec --pin` with no explicit app.
+#[allow(clippy::collapsible_if)]
 pub(crate) fn resolve_implicit_pin_spec(start: &Path) -> Result<String> {
     let pins = load_pins_from_ancestors(start)?;
     match pins.apps.len() {
         0 => bail!("no app entries in pins file"),
         1 => Ok(pins.apps.values().next().expect("len checked").clone()),
         _ => {
-            if let Some(d) = &pins.default
-                && let Some(s) = pins.apps.get(d)
-            {
-                return Ok(s.clone());
+            if let Some(d) = &pins.default {
+                if let Some(s) = pins.apps.get(d) {
+                    return Ok(s.clone());
+                }
             }
             let keys: Vec<&str> = pins.apps.keys().map(String::as_str).collect();
             bail!(

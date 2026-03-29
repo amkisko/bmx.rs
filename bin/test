@@ -16,7 +16,7 @@ check_file_sizes() {
 
   local files_raw
   files_raw="$(rg --files src tests bin -g '*.rs' -g '*.sh' 2>/dev/null | sort || true)"
-  if [ -z "${files_raw}" ]; then
+  if [[ -z ${files_raw} ]]; then
     echo "no code files found under src/, tests/, bin/"
     return 0
   fi
@@ -30,10 +30,10 @@ check_file_sizes() {
 
   while IFS= read -r rel; do
     local lines
-    lines="$(wc -l < "${rel}" | tr -d ' ')"
-    if [ "${lines}" -gt "${SOFT_LIMIT}" ]; then
+    lines="$(wc -l <"${rel}" | tr -d ' ')"
+    if [[ ${lines} -gt ${SOFT_LIMIT} ]]; then
       printf "%-6s  %s" "${lines}" "${rel}"
-      if [ "${lines}" -gt "${HARD_LIMIT}" ]; then
+      if [[ ${lines} -gt ${HARD_LIMIT} ]]; then
         printf "  [HARD]"
         hard_count=$((hard_count + 1))
       else
@@ -49,20 +49,20 @@ EOF
   printf "\nsoft violations: %s\n" "${soft_count}"
   printf "hard violations: %s\n" "${hard_count}"
 
-  if [ "${hard_count}" -gt 0 ]; then
+  if [[ ${hard_count} -gt 0 ]]; then
     echo "error: hard file-size limit exceeded" >&2
     exit 1
   fi
 }
+
+echo "[bmx][test] trunk fmt --all"
+trunk fmt --all
 
 echo "[bmx][test] cargo fmt --check"
 cargo fmt --all -- --check
 
 echo "[bmx][test] cargo clippy"
 cargo clippy --all-targets -- -D warnings
-
-echo "[bmx][test] trunk fmt --all"
-trunk fmt --all
 
 echo "[bmx][test] trunk check --all"
 trunk check --all

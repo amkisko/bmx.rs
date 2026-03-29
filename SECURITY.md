@@ -4,7 +4,7 @@
 
 Do not report vulnerabilities in public issues.
 
-Send security reports to security@kiskolabs.com or use GitHub private security advisories. A useful report includes a clear description of the issue, reproduction steps, impact assessment, and any known remediation ideas.
+Send security reports to [security@kiskolabs.com](mailto:security@kiskolabs.com) or use [GitHub private security advisories](https://github.com/amkisko/bmx.rs/security/advisories). A useful report includes a clear description of the issue, reproduction steps, impact assessment, and any known remediation ideas.
 
 ## Disclosure Process
 

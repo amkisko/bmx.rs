@@ -1,0 +1,2 @@
+# Keep in sync with `.trunk/configs/.rustfmt.toml` so `cargo fmt` and Trunk use the same rules.
+edition = "2024"

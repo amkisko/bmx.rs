@@ -1,11 +1,11 @@
 name: Bug Report
 description: Create a report to help us improve.
 title: "[Bug]: "
-labels: ["bug", "triage"]
+labels: [bug, triage]
 body:
   - type: markdown
     attributes:
-      value: "Please verify details and include exact reproduction steps."
+      value: Please verify details and include exact reproduction steps.
   - type: textarea
     id: description
     attributes:

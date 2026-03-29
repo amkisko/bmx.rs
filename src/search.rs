@@ -456,11 +456,12 @@ fn search_homebrew(q: &str, limit: usize, print_url: bool) -> Result<()> {
 }
 
 /// Pick a git clone URL from formula metadata (homepage or stable tarball URL host path).
+#[allow(clippy::collapsible_if)]
 fn brew_formula_to_install_spec(f: &JsonValue) -> Option<String> {
-    if let Some(h) = f.get("homepage").and_then(|h| h.as_str())
-        && let Some(s) = homepage_to_git_clone_spec(h)
-    {
-        return Some(s);
+    if let Some(h) = f.get("homepage").and_then(|h| h.as_str()) {
+        if let Some(s) = homepage_to_git_clone_spec(h) {
+            return Some(s);
+        }
     }
     if let Some(u) = f
         .get("urls")
