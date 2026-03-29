@@ -68,7 +68,8 @@ pub(crate) fn run_search(
                 .default_source
                 .as_deref()
                 .ok_or_else(|| anyhow!("default source is not configured; run `bmx source set-default <url>` (GitLab origin)"))?;
-            let base_url = Url::parse(&normalize_source_base(base_raw)).context("invalid default_source URL")?;
+            let base_url = Url::parse(&normalize_source_base(base_raw))
+                .context("invalid default_source URL")?;
             let api_root = gitlab_api_v4_root(&base_url);
             let cfg_resolve = config_with_gitlab_base(&cfg, &base_url);
             search_gitlab(
@@ -89,11 +90,11 @@ pub(crate) fn run_search(
                 }
             }
 
-            let base_raw = cfg
-                .default_source
-                .as_deref()
-                .ok_or_else(|| anyhow!("default source is not configured; run `bmx source set-default <url>`"))?;
-            let base_url = Url::parse(&normalize_source_base(base_raw)).context("invalid default_source URL")?;
+            let base_raw = cfg.default_source.as_deref().ok_or_else(|| {
+                anyhow!("default source is not configured; run `bmx source set-default <url>`")
+            })?;
+            let base_url = Url::parse(&normalize_source_base(base_raw))
+                .context("invalid default_source URL")?;
             let host = base_url
                 .host_str()
                 .ok_or_else(|| anyhow!("default_source has no host"))?
@@ -174,8 +175,12 @@ fn search_github(
         .append_pair("per_page", &limit.to_string());
 
     let body = http_get_json(&url, github_headers)?;
-    let parsed: GitHubSearchResponse = serde_json::from_str(&body)
-        .with_context(|| format!("unexpected GitHub API response (first 200 chars): {}", clip(&body)))?;
+    let parsed: GitHubSearchResponse = serde_json::from_str(&body).with_context(|| {
+        format!(
+            "unexpected GitHub API response (first 200 chars): {}",
+            clip(&body)
+        )
+    })?;
 
     let mut printed = 0usize;
     for item in parsed.items {
@@ -197,8 +202,7 @@ fn search_github(
             continue;
         }
         let (owner, repo) = (parts[0], parts[1]);
-        if probe
-            && !github_repo_root_buildable(base, owner, repo, item.default_branch.as_deref())?
+        if probe && !github_repo_root_buildable(base, owner, repo, item.default_branch.as_deref())?
         {
             continue;
         }
@@ -249,9 +253,9 @@ fn github_contents_has_marker(body: &str) -> bool {
             .collect(),
         None => return false,
     };
-    names.iter().any(|n| {
-        ROOT_BUILD_MARKERS.contains(&n.as_str()) || n.ends_with(".rb")
-    })
+    names
+        .iter()
+        .any(|n| ROOT_BUILD_MARKERS.contains(&n.as_str()) || n.ends_with(".rb"))
 }
 
 #[derive(Deserialize)]
@@ -289,8 +293,12 @@ fn search_gitlab(
         .append_pair("archived", "false");
 
     let body = http_get_json(&url, gitlab_headers)?;
-    let items: Vec<GitLabProject> = serde_json::from_str(&body)
-        .with_context(|| format!("unexpected GitLab API response (first 200 chars): {}", clip(&body)))?;
+    let items: Vec<GitLabProject> = serde_json::from_str(&body).with_context(|| {
+        format!(
+            "unexpected GitLab API response (first 200 chars): {}",
+            clip(&body)
+        )
+    })?;
 
     let mut printed = 0usize;
     for item in items {
@@ -315,7 +323,9 @@ fn search_gitlab(
             let u = item
                 .http_url_to_repo
                 .or(item.ssh_url_to_repo)
-                .unwrap_or_else(|| normalize_explicit_url(&format!("https://gitlab.com/{path}.git")));
+                .unwrap_or_else(|| {
+                    normalize_explicit_url(&format!("https://gitlab.com/{path}.git"))
+                });
             println!("{u}");
         } else {
             println!("{path}");
@@ -345,9 +355,9 @@ fn gitlab_repo_root_buildable(
     let Ok(entries) = serde_json::from_str::<Vec<GitLabTreeEntry>>(&body) else {
         return Ok(false);
     };
-    Ok(entries.iter().any(|e| {
-        ROOT_BUILD_MARKERS.contains(&e.name.as_str()) || e.name.ends_with(".rb")
-    }))
+    Ok(entries
+        .iter()
+        .any(|e| ROOT_BUILD_MARKERS.contains(&e.name.as_str()) || e.name.ends_with(".rb")))
 }
 
 #[derive(Deserialize)]
@@ -378,8 +388,12 @@ fn search_aur(q: &str, limit: usize, print_url: bool) -> Result<()> {
         .append_pair("arg", q.trim());
 
     let body = http_get_json(&url, minimal_headers)?;
-    let parsed: AurRpcResponse = serde_json::from_str(&body)
-        .with_context(|| format!("unexpected AUR RPC response (first 200 chars): {}", clip(&body)))?;
+    let parsed: AurRpcResponse = serde_json::from_str(&body).with_context(|| {
+        format!(
+            "unexpected AUR RPC response (first 200 chars): {}",
+            clip(&body)
+        )
+    })?;
 
     for r in parsed.results.into_iter().take(limit) {
         let clone_url = format!("https://aur.archlinux.org/{}.git", r.package_base);
@@ -407,11 +421,14 @@ struct AurResult {
 }
 
 fn search_homebrew(q: &str, limit: usize, print_url: bool) -> Result<()> {
-    let url = Url::parse("https://formulae.brew.sh/api/formula.json")
-        .expect("static URL");
+    let url = Url::parse("https://formulae.brew.sh/api/formula.json").expect("static URL");
     let body = http_get_json(&url, minimal_headers)?;
-    let formulas: Vec<JsonValue> = serde_json::from_str(&body)
-        .with_context(|| format!("unexpected Homebrew JSON (first 200 chars): {}", clip(&body)))?;
+    let formulas: Vec<JsonValue> = serde_json::from_str(&body).with_context(|| {
+        format!(
+            "unexpected Homebrew JSON (first 200 chars): {}",
+            clip(&body)
+        )
+    })?;
 
     let needle = q.trim().to_ascii_lowercase();
     let mut printed = 0usize;
@@ -547,7 +564,10 @@ fn http_get_json(url: &Url, headers: fn(&Url) -> Vec<(&'static str, String)>) ->
     Ok(body)
 }
 
-fn http_get_json_soft(url: &Url, headers: fn(&Url) -> Vec<(&'static str, String)>) -> Result<String> {
+fn http_get_json_soft(
+    url: &Url,
+    headers: fn(&Url) -> Vec<(&'static str, String)>,
+) -> Result<String> {
     http_request_json(url, headers, false)
 }
 
@@ -626,7 +646,8 @@ mod tests {
 
     #[test]
     fn parses_aur_rpc() {
-        let j = r#"{"resultcount":1,"results":[{"Name":"yay","PackageBase":"yay","Version":"1-1"}]}"#;
+        let j =
+            r#"{"resultcount":1,"results":[{"Name":"yay","PackageBase":"yay","Version":"1-1"}]}"#;
         let p: AurRpcResponse = serde_json::from_str(j).unwrap();
         assert_eq!(p.results[0].package_base, "yay");
     }

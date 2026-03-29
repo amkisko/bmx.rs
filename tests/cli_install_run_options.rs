@@ -177,7 +177,10 @@ fn pin_with_explicit_app_writes_cwd_pin_default_command() {
 
     let pins_path = project.path().join(".bmx/pins.toml");
     let raw = fs::read_to_string(&pins_path).expect("read pins.toml");
-    assert!(raw.contains(&app), "pins.toml should contain spec; got:\n{raw}");
+    assert!(
+        raw.contains(&app),
+        "pins.toml should contain spec; got:\n{raw}"
+    );
 }
 
 #[test]
@@ -221,10 +224,7 @@ fn pin_second_app_merges_pins_toml_and_keeps_default() {
         &pins_path,
         fs::read_to_string(&pins_path)
             .expect("read")
-            .replace(
-                "default = \"multi-a\"",
-                "default = \"multi-b\"",
-            ),
+            .replace("default = \"multi-a\"", "default = \"multi-b\""),
     )
     .expect("set default");
 
