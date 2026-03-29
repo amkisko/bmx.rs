@@ -70,6 +70,7 @@ pub(crate) fn reinstall_from_meta(
     install: InstallMetadata,
     cli_verbose: bool,
     trust_prompt: bool,
+    trust_global: bool,
 ) -> Result<()> {
     let cfg = load_config(home)?;
     let layout = app_layout(home, &install.app);
@@ -83,7 +84,12 @@ pub(crate) fn reinstall_from_meta(
     )?;
     prompt_untrusted_source_consent(home, &install.source_url, &layout.repo_dir)?;
     if trust_prompt {
-        prompt_import_signing_keys_for_source(home, &install.source_url, &layout.repo_dir)?;
+        prompt_import_signing_keys_for_source(
+            home,
+            &install.source_url,
+            &layout.repo_dir,
+            trust_global,
+        )?;
     }
     enforce_source_trust(home, &install.source_url, &layout.repo_dir)?;
 

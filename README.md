@@ -42,6 +42,8 @@ User-local install without touching `/usr/local`:
 
 Each install lives in `~/.bmx/apps/<id>/` (`repo/` is the clone, `install.toml` is metadata). On install or first run, bmx resolves the spec (bare name, `owner/repo`, URL, `registry:repo`, `name@ref` / semver), syncs git, checks out the ref, picks a stack (Rust → CMake → Make → Homebrew → AUR), builds, then stores the executable. Per-repo `bmx.toml` can set `strategy`, `workdir`, `run`, and `[bmx.hooks]` (`pre_run`, `post_install`). Workspace members: `owner/repo.rs:crate@ref`. Host vs Docker/Podman/nerdctl: `bmx isolation`; optional `integrity_check` in `config.toml` compares live HEAD to metadata on run.
 
+Public forge host shortcuts are accepted directly (no scheme required), including GitHub, GitLab, Bitbucket, SourceHut (`git.sr.ht`), Codeberg, and other host-style URLs like `gitea.example.com/org/repo`.
+
 Where is the code, and how to rebuild:
 
 ```bash
@@ -85,12 +87,34 @@ Optional `~/.bmx/trust.toml` can enforce source allow/deny prefixes and signed-c
 Trust helpers:
 
 ```bash
-bmx trust show
+bmx trust list
+bmx trust list --global          # only global/default trust scope
+bmx trust list --local           # only local/source-scoped rules
+bmx trust list my-app            # trust view filtered to installed app source
 bmx trust add-key KEYID_OR_FINGERPRINT [--match-prefix PREFIX]
 bmx trust set-signed --match-prefix PREFIX [--enabled true|false]
 bmx trust set-allow --match-prefix PREFIX [--allow true|false]
 bmx trust import-repo APP [--match-prefix PREFIX]
+bmx trust check [SOURCE]
 ```
+
+`bmx trust check` audits all trusted signer keys from `~/.bmx/trust.toml` against a compromised-key feed.
+- `SOURCE` may be:
+- A direct `.toml` or `.txt` URL.
+- A git URL (the repository should include one of: `compromised-keys.toml`, `compromised_keys.toml`, `trust/compromised-keys.toml`, `trust/compromised_keys.toml`, or `.txt` variants).
+- If `SOURCE` is omitted, bmx uses a default public feed URL.
+
+Recommended maintainer format (`.toml`):
+
+```toml
+[[keys]]
+value = "SHA256:EXAMPLEKEY..."
+reason = "private key exposure"
+reference = "https://example.com/advisory/123"
+reported_at = "2026-03-29"
+```
+
+Plain-text feeds are also supported (`.txt`): one key per line, optional `# reason` comment.
 
 ### Execute
 
@@ -103,19 +127,25 @@ bmx APP --pin -- ARGS              # same, default command
 
 `-v` / `--verbose` prints app id, commit, and binary path; the child prepends that binary’s directory to `PATH`. With `integrity_check = true`, run/exec can verify the checkout matches `install.toml`. Details: `bmx --help` and [SPEC.md](SPEC.md).
 
-`--trust` (global) affects install/update/rebuild/reinstall/self-update: it shows concise signer details for the checked-out `HEAD` commit and asks for explicit consent before importing signer keys into trust policy.
+`--trust` (global flag) affects install/update/rebuild/reinstall/self-update: it shows concise signer details for the checked-out `HEAD` commit and asks for explicit consent before importing signer keys into trust policy. Imported keys are source-scoped by default; pass `--global --trust` to add them to default/global trust scope.
 
 Even without `--trust`, install/update/rebuild/reinstall/self-update require explicit consent for untrusted sources (when HEAD is not verified-good and signer is not already trusted by policy).
+
+SSH-signature checks are scoped to `bmx` git subprocesses by using per-source allowed signers files under `$BMX_HOME/trust/allowed_signers/`, so `bmx` does not modify your global git config.
 
 For CI/non-interactive pipelines, set `BMX_TRUST_ASSUME_YES=1` to auto-consent these trust prompts. Use this only in controlled automation contexts.
 
 ## Development
 
 ```bash
-cargo fmt --all -- --check
-cargo clippy --all-targets -- -D warnings
-cargo test
+bin/test
 ```
+
+`bin/test` runs formatting, linting, file-size limits, tests, and coverage gate.
+
+File size policy used by `bin/test`:
+- Soft limit: 150 lines (reported as `[SOFT]`).
+- Hard limit: 300 lines (fails with non-zero exit).
 
 ## Contributing
 

@@ -22,6 +22,8 @@ mod search;
 mod shim;
 mod source;
 mod trust;
+mod trust_check;
+mod trust_feed;
 mod types;
 mod workspace;
 

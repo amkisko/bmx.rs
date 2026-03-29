@@ -71,6 +71,7 @@ pub(crate) fn run_app(
             false,
             persist_requested_ref,
             false,
+            false,
         )?;
     }
 
@@ -94,6 +95,7 @@ pub(crate) fn run_app(
             verbose,
             false,
             persist_requested_ref,
+            false,
             false,
         )?;
         let layout = resolve_layout_for_run(home, app);
@@ -153,6 +155,7 @@ pub(crate) fn install_app(
     record_history: bool,
     persist_requested_ref: bool,
     trust_prompt: bool,
+    trust_global: bool,
 ) -> Result<()> {
     let spec = parse_app_spec(app);
     let cfg = load_config(home)?;
@@ -196,7 +199,7 @@ pub(crate) fn install_app(
         let app_id = merged.app.clone();
         let source_url = merged.source_url.clone();
         let snapshot_dir = capture_install_snapshot(home, &app_id)?;
-        reinstall_from_meta(home, merged, cli_verbose, trust_prompt)?;
+        reinstall_from_meta(home, merged, cli_verbose, trust_prompt, trust_global)?;
         if !persist_requested_ref {
             let mut refreshed: InstallMetadata = read_toml(&layout.meta_file)?;
             refreshed.requested_ref = persisted_requested_ref;
@@ -241,7 +244,7 @@ pub(crate) fn install_app(
         checkout_requested_ref(&layout.repo_dir, spec.requested_ref.as_deref(), cli_verbose)?;
     prompt_untrusted_source_consent(home, &source_url, &layout.repo_dir)?;
     if trust_prompt {
-        prompt_import_signing_keys_for_source(home, &source_url, &layout.repo_dir)?;
+        prompt_import_signing_keys_for_source(home, &source_url, &layout.repo_dir, trust_global)?;
     }
     enforce_source_trust(home, &source_url, &layout.repo_dir)?;
 
@@ -309,13 +312,14 @@ pub(crate) fn reinstall_app(
     cli_verbose: bool,
     record_history: bool,
     trust_prompt: bool,
+    trust_global: bool,
 ) -> Result<()> {
     let layout = resolve_installed_layout(home, app)?;
     let meta: InstallMetadata = read_toml(&layout.meta_file)?;
     let app_id = meta.app.clone();
     let source_url = meta.source_url.clone();
     let snapshot_dir = capture_install_snapshot(home, &app_id)?;
-    reinstall_from_meta(home, meta, cli_verbose, trust_prompt)?;
+    reinstall_from_meta(home, meta, cli_verbose, trust_prompt, trust_global)?;
     let id = new_action_id();
     append_audit(
         home,
@@ -354,6 +358,7 @@ pub(crate) fn rebuild_app(
     record_history: bool,
     persist_requested_ref: bool,
     trust_prompt: bool,
+    trust_global: bool,
 ) -> Result<()> {
     if install {
         return install_app(
@@ -364,6 +369,7 @@ pub(crate) fn rebuild_app(
             record_history,
             persist_requested_ref,
             trust_prompt,
+            trust_global,
         );
     }
 
@@ -389,7 +395,7 @@ pub(crate) fn rebuild_app(
     checkout_requested_ref(&layout.repo_dir, requested_ref.as_deref(), cli_verbose)?;
     prompt_untrusted_source_consent(home, &source_url, &layout.repo_dir)?;
     if trust_prompt {
-        prompt_import_signing_keys_for_source(home, &source_url, &layout.repo_dir)?;
+        prompt_import_signing_keys_for_source(home, &source_url, &layout.repo_dir, trust_global)?;
     }
     enforce_source_trust(home, &source_url, &layout.repo_dir)?;
 
@@ -455,8 +461,18 @@ pub(crate) fn self_update(
     cli_verbose: bool,
     record_history: bool,
     trust_prompt: bool,
+    trust_global: bool,
 ) -> Result<()> {
-    install_app(home, app, None, cli_verbose, false, true, trust_prompt)?;
+    install_app(
+        home,
+        app,
+        None,
+        cli_verbose,
+        false,
+        true,
+        trust_prompt,
+        trust_global,
+    )?;
 
     let layout = resolve_layout_for_run(home, app);
     let metadata: InstallMetadata = read_toml(&layout.meta_file)?;
@@ -596,6 +612,7 @@ pub(crate) fn update_all(
     cli_verbose: bool,
     record_history: bool,
     trust_prompt: bool,
+    trust_global: bool,
 ) -> Result<()> {
     let apps_root = home.join("apps");
     if !apps_root.exists() {
@@ -616,7 +633,13 @@ pub(crate) fn update_all(
     plan.sort_by(|a, b| a.0.app.cmp(&b.0.app));
 
     for (install, _) in &plan {
-        reinstall_from_meta(home, install.clone(), cli_verbose, trust_prompt)?;
+        reinstall_from_meta(
+            home,
+            install.clone(),
+            cli_verbose,
+            trust_prompt,
+            trust_global,
+        )?;
     }
 
     if plan.is_empty() {
@@ -733,4 +756,54 @@ fn du_dir_bytes(path: &Path) -> Result<u64> {
         n += du_dir_bytes(&e?.path())?;
     }
     Ok(n)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[test]
+    fn path_for_child_prefixes_parent_to_path() {
+        let td = tempdir().unwrap();
+        let exe = td.path().join("bin").join("tool");
+        fs::create_dir_all(exe.parent().unwrap()).unwrap();
+        fs::write(&exe, "#!/bin/sh\n").unwrap();
+        let p = path_for_child(&exe).unwrap();
+        let s = p.to_string_lossy().to_string();
+        assert!(s.starts_with(&format!("{}:", exe.parent().unwrap().display())));
+    }
+
+    #[test]
+    fn list_files_under_returns_sorted_relative_paths() {
+        let td = tempdir().unwrap();
+        fs::create_dir_all(td.path().join("a")).unwrap();
+        fs::write(td.path().join("z.txt"), "z").unwrap();
+        fs::write(td.path().join("a").join("b.txt"), "b").unwrap();
+        let files = list_files_under(td.path()).unwrap();
+        let names: Vec<String> = files.iter().map(|p| p.display().to_string()).collect();
+        assert_eq!(names, vec!["a/b.txt".to_string(), "z.txt".to_string()]);
+    }
+
+    #[test]
+    fn du_dir_bytes_sums_file_sizes() {
+        let td = tempdir().unwrap();
+        fs::create_dir_all(td.path().join("d")).unwrap();
+        fs::write(td.path().join("a"), "1234").unwrap();
+        fs::write(td.path().join("d").join("b"), "12").unwrap();
+        let n = du_dir_bytes(td.path()).unwrap();
+        assert!(n >= 6);
+    }
+
+    #[test]
+    fn staged_replacement_path_uses_bmx_new_extension_on_unix() {
+        #[cfg(unix)]
+        {
+            let p = Path::new("/tmp/bmx");
+            assert_eq!(
+                staged_replacement_path(p),
+                PathBuf::from("/tmp/bmx.bmx-new")
+            );
+        }
+    }
 }

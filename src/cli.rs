@@ -23,6 +23,10 @@ pub(crate) struct Cli {
     #[arg(long, global = true)]
     pub(crate) trust: bool,
 
+    /// With `--trust`, import signer keys into default/global trust scope instead of source-specific scope.
+    #[arg(long = "global", global = true)]
+    pub(crate) trust_global: bool,
+
     #[arg(help = "App/repo name to run (default command)")]
     pub(crate) app: Option<String>,
 
@@ -162,6 +166,14 @@ pub(crate) enum CheckoutCommands {
 
 #[derive(Subcommand, Debug)]
 pub(crate) enum TrustCommands {
+    /// List trust entries. By default shows global and local rules; filter with top-level `--global` or `--local`.
+    List {
+        /// Optional installed app id/spec to filter local rules by resolved source URL.
+        app: Option<String>,
+        /// Show only local (match_prefix) trust rules.
+        #[arg(long)]
+        local: bool,
+    },
     /// Print effective ~/.bmx/trust.toml (or defaults when missing).
     Show,
     /// Add an allowed signer key/fingerprint to default or a matching prefix rule.
@@ -189,6 +201,11 @@ pub(crate) enum TrustCommands {
         app: String,
         #[arg(long = "match-prefix")]
         match_prefix: Option<String>,
+    },
+    /// Check trusted keys against a compromised-key feed (git repo or direct .txt/.toml URL).
+    Check {
+        /// Optional source override. Examples: `https://host/list.toml`, `https://host/list.txt`, or `git@host:org/repo.git`.
+        source: Option<String>,
     },
 }
 

@@ -23,6 +23,10 @@ use crate::types::{
 #[test]
 fn source_helpers_cover_normalization_and_ids() {
     assert!(looks_like_url("git@github.com:acme/tool.git"));
+    assert!(looks_like_url("bitbucket.org/workspace/tool"));
+    assert!(looks_like_url("codeberg.org/acme/tool"));
+    assert!(looks_like_url("git.sr.ht/~acme/tool"));
+    assert!(looks_like_url("gitea.example.com/acme/tool"));
     assert!(!looks_like_url("tool"));
     assert_eq!(
         normalize_explicit_url("github.com/a/b"),
@@ -80,6 +84,14 @@ fn resolve_source_covers_success_and_failure_paths() {
     assert_eq!(
         resolve_source(&gh_default, &short_pkg.source).expect("short path"),
         "https://github.com/amkisko/scout-cli.rs.git"
+    );
+    assert_eq!(
+        resolve_source(&gh_default, "codeberg.org/acme/tool").expect("explicit host shortcut"),
+        "https://codeberg.org/acme/tool"
+    );
+    assert_eq!(
+        resolve_source(&gh_default, "bitbucket.org/acme/tool").expect("bitbucket explicit host"),
+        "https://bitbucket.org/acme/tool"
     );
 }
 

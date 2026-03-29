@@ -94,3 +94,57 @@ fn shell_quote(input: &str) -> String {
     out.push('\'');
     out
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[test]
+    fn shell_helpers_quote_and_join() {
+        assert_eq!(shell_quote(""), "''");
+        assert_eq!(shell_quote("a'b"), "'a'\"'\"'b'");
+        assert_eq!(
+            shell_join("echo", &["a b", "c"]),
+            "'echo' 'a b' 'c'".to_string()
+        );
+    }
+
+    #[test]
+    fn resolve_backend_off_is_error() {
+        assert!(resolve_backend(BuildIsolation::Off).is_err());
+    }
+
+    #[test]
+    fn resolve_backend_explicit_matches_tool_presence() {
+        let docker = resolve_backend(BuildIsolation::Docker);
+        assert_eq!(docker.is_ok(), has_tool("docker"));
+        let podman = resolve_backend(BuildIsolation::Podman);
+        assert_eq!(podman.is_ok(), has_tool("podman"));
+        let nerdctl = resolve_backend(BuildIsolation::Nerdctl);
+        assert_eq!(nerdctl.is_ok(), has_tool("nerdctl"));
+    }
+
+    #[test]
+    fn run_build_checked_off_runs_host_command() {
+        let td = tempdir().unwrap();
+        run_build_checked(
+            td.path(),
+            "sh",
+            &["-lc", "true"],
+            BuildIsolation::Off,
+            false,
+        )
+        .unwrap();
+        assert!(
+            run_build_checked(
+                td.path(),
+                "sh",
+                &["-lc", "false"],
+                BuildIsolation::Off,
+                false
+            )
+            .is_err()
+        );
+    }
+}

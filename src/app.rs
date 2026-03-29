@@ -1,4 +1,5 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Result, bail};
 
@@ -38,6 +39,7 @@ pub(crate) fn dispatch(cli: Cli, home: &Path) -> Result<()> {
             run_app(home, &spec, &args, cli.verbose, cli.pin)
         }
         Some(Commands::Install { app, install_as }) => {
+            require_trust_for_global(cli.trust_global, cli.trust)?;
             install_app(
                 home,
                 &app,
@@ -46,11 +48,13 @@ pub(crate) fn dispatch(cli: Cli, home: &Path) -> Result<()> {
                 record,
                 cli.pin,
                 cli.trust,
+                cli.trust_global,
             )?;
             println!("installed {app}");
             Ok(())
         }
         Some(Commands::Rebuild { install, app }) => {
+            require_trust_for_global(cli.trust_global, cli.trust)?;
             let cwd = std::env::current_dir()?;
             let spec = if cli.pin {
                 match app.as_deref() {
@@ -75,6 +79,7 @@ pub(crate) fn dispatch(cli: Cli, home: &Path) -> Result<()> {
                 record,
                 cli.pin,
                 cli.trust,
+                cli.trust_global,
             )?;
             if install {
                 println!("rebuilt and installed {spec}");
@@ -89,17 +94,20 @@ pub(crate) fn dispatch(cli: Cli, home: &Path) -> Result<()> {
             Ok(())
         }
         Some(Commands::Reinstall { app }) => {
-            reinstall_app(home, &app, cli.verbose, record, cli.trust)?;
+            require_trust_for_global(cli.trust_global, cli.trust)?;
+            reinstall_app(home, &app, cli.verbose, record, cli.trust, cli.trust_global)?;
             println!("reinstalled {app}");
             Ok(())
         }
         Some(Commands::SelfUpdate { app }) => {
-            self_update(home, &app, cli.verbose, record, cli.trust)?;
+            require_trust_for_global(cli.trust_global, cli.trust)?;
+            self_update(home, &app, cli.verbose, record, cli.trust, cli.trust_global)?;
             println!("self-updated {app}");
             Ok(())
         }
         Some(Commands::Update { app }) => match app {
             Some(app_name) => {
+                require_trust_for_global(cli.trust_global, cli.trust)?;
                 resolve_installed_layout(home, &app_name)?;
                 install_app(
                     home,
@@ -109,12 +117,14 @@ pub(crate) fn dispatch(cli: Cli, home: &Path) -> Result<()> {
                     record,
                     cli.pin,
                     cli.trust,
+                    cli.trust_global,
                 )?;
                 println!("updated {app_name}");
                 Ok(())
             }
             None => {
-                update_all(home, cli.verbose, record, cli.trust)?;
+                require_trust_for_global(cli.trust_global, cli.trust)?;
+                update_all(home, cli.verbose, record, cli.trust, cli.trust_global)?;
                 println!("updated installed apps");
                 Ok(())
             }
@@ -122,7 +132,7 @@ pub(crate) fn dispatch(cli: Cli, home: &Path) -> Result<()> {
         Some(Commands::Source { command }) => dispatch_source(home, command),
         Some(Commands::Isolation { command }) => dispatch_isolation(home, command),
         Some(Commands::Checkout { command }) => dispatch_checkout(home, command),
-        Some(Commands::Trust { command }) => dispatch_trust(home, command),
+        Some(Commands::Trust { command }) => dispatch_trust(home, command, cli.trust_global),
         Some(Commands::Shim { command }) => {
             crate::config::ensure_base_dirs(home)?;
             match command {
@@ -266,8 +276,30 @@ fn dispatch_checkout(home: &Path, command: CheckoutCommands) -> Result<()> {
     }
 }
 
-fn dispatch_trust(home: &Path, command: TrustCommands) -> Result<()> {
+fn require_trust_for_global(trust_global: bool, trust: bool) -> Result<()> {
+    if trust_global && !trust {
+        bail!("`--global` requires `--trust`");
+    }
+    Ok(())
+}
+
+fn dispatch_trust(home: &Path, command: TrustCommands, global_filter: bool) -> Result<()> {
     match command {
+        TrustCommands::List { app, local } => {
+            if local && global_filter {
+                bail!("use either `--global` or `--local` with `bmx trust list`, not both");
+            }
+            let scope = if global_filter {
+                crate::trust::TrustListScope::Global
+            } else if local {
+                crate::trust::TrustListScope::Local
+            } else {
+                crate::trust::TrustListScope::All
+            };
+            let out = crate::trust::list_policy(home, scope, app.as_deref())?;
+            println!("{out}");
+            Ok(())
+        }
         TrustCommands::Show => {
             let policy = crate::trust::show_policy_toml(home)?;
             println!("{policy}");
@@ -298,17 +330,54 @@ fn dispatch_trust(home: &Path, command: TrustCommands) -> Result<()> {
             Ok(())
         }
         TrustCommands::ImportRepo { app, match_prefix } => {
-            let layout = crate::layout::resolve_installed_layout(home, &app)?;
-            let n = crate::trust::import_signing_keys_from_repo(
-                home,
-                &layout.repo_dir,
-                match_prefix.as_deref(),
-            )?;
-            println!(
-                "imported {n} signing key value(s) from {}",
-                layout.repo_dir.display()
-            );
+            let (n, from) = import_signing_keys_from_any(home, &app, match_prefix.as_deref())?;
+            if n == 0 {
+                println!("no new signing key values to import from {from}");
+            } else {
+                println!("imported {n} signing key value(s) from {from}");
+            }
             Ok(())
         }
+        TrustCommands::Check { source } => {
+            crate::trust_check::run_trust_check(home, source.as_deref())
+        }
     }
+}
+
+fn import_signing_keys_from_any(
+    home: &Path,
+    app_or_source: &str,
+    match_prefix: Option<&str>,
+) -> Result<(usize, String)> {
+    if let Ok(layout) = crate::layout::resolve_installed_layout(home, app_or_source) {
+        let meta: crate::types::InstallMetadata = crate::io::read_toml(&layout.meta_file)?;
+        let n = crate::trust::import_signing_keys_from_repo(
+            home,
+            &meta.source_url,
+            &layout.repo_dir,
+            match_prefix,
+        )?;
+        return Ok((n, layout.repo_dir.display().to_string()));
+    }
+
+    let cfg = load_config(home)?;
+    let spec = crate::app_spec::parse_app_spec(app_or_source);
+    let source_url = crate::source::resolve_source(&cfg, &spec.source)?;
+    let stamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let tmp_root =
+        std::env::temp_dir().join(format!("bmx-trust-import-{}-{}", std::process::id(), stamp));
+    let repo_dir: PathBuf = tmp_root.join("repo");
+    std::fs::create_dir_all(&repo_dir)?;
+
+    let result = (|| -> Result<usize> {
+        crate::repo::sync_repo(&source_url, &repo_dir, &cfg, false)?;
+        crate::revision::checkout_requested_ref(&repo_dir, spec.requested_ref.as_deref(), false)?;
+        crate::trust::import_signing_keys_from_repo(home, &source_url, &repo_dir, match_prefix)
+    })();
+    let _ = std::fs::remove_dir_all(&tmp_root);
+
+    result.map(|n| (n, format!("{source_url} (temporary checkout)")))
 }

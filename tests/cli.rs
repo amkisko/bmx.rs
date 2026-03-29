@@ -154,6 +154,20 @@ fn cli_without_args_fails_with_helpful_message() {
 }
 
 #[test]
+fn global_flag_requires_trust_flag() {
+    let home = TempDir::new().expect("home tempdir");
+    let repos = TempDir::new().expect("repos tempdir");
+    let repo = init_make_repo(repos.path(), "global-flag", "global-flag", "OK");
+    let app = format!("file://{}", repo.display());
+
+    bmx(home.path())
+        .args(["--global", "install", &app])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("`--global` requires `--trust`"));
+}
+
+#[test]
 fn source_set_and_show_work() {
     let home = TempDir::new().expect("home tempdir");
 

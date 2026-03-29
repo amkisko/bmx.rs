@@ -60,6 +60,19 @@ pub(crate) fn looks_like_url(app: &str) -> bool {
         || app.starts_with("git@")
         || app.starts_with("github.com/")
         || app.starts_with("gitlab.com/")
+        || app.starts_with("bitbucket.org/")
+        || app.starts_with("codeberg.org/")
+        || app.starts_with("git.sr.ht/")
+        || app.starts_with("sr.ht/")
+        || looks_like_host_path(app)
+}
+
+fn looks_like_host_path(app: &str) -> bool {
+    let Some((head, _tail)) = app.split_once('/') else {
+        return false;
+    };
+    // `host.tld/path` shortcuts should resolve as explicit URLs.
+    head.contains('.') && !head.contains(':')
 }
 
 pub(crate) fn normalize_explicit_url(input: &str) -> String {

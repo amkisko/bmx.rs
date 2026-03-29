@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+cd "${REPO_ROOT}"
+
+SOFT_LIMIT="${BMX_FILE_SOFT_LIMIT:-150}"
+HARD_LIMIT="${BMX_FILE_HARD_LIMIT:-300}"
+
+check_file_sizes() {
+  if ! command -v rg >/dev/null 2>&1; then
+    echo "error: ripgrep (rg) is required" >&2
+    exit 2
+  fi
+
+  local files_raw
+  files_raw="$(rg --files src tests bin -g '*.rs' -g '*.sh' 2>/dev/null | sort || true)"
+  if [ -z "${files_raw}" ]; then
+    echo "no code files found under src/, tests/, bin/"
+    return 0
+  fi
+
+  local soft_count=0
+  local hard_count=0
+
+  printf "file-size limits: soft>%s, hard>%s\n\n" "${SOFT_LIMIT}" "${HARD_LIMIT}"
+  printf "%-6s  %s\n" "lines" "file"
+  printf "%-6s  %s\n" "-----" "----"
+
+  while IFS= read -r rel; do
+    local lines
+    lines="$(wc -l < "${rel}" | tr -d ' ')"
+    if [ "${lines}" -gt "${SOFT_LIMIT}" ]; then
+      printf "%-6s  %s" "${lines}" "${rel}"
+      if [ "${lines}" -gt "${HARD_LIMIT}" ]; then
+        printf "  [HARD]"
+        hard_count=$((hard_count + 1))
+      else
+        printf "  [SOFT]"
+        soft_count=$((soft_count + 1))
+      fi
+      printf "\n"
+    fi
+  done <<EOF
+${files_raw}
+EOF
+
+  printf "\nsoft violations: %s\n" "${soft_count}"
+  printf "hard violations: %s\n" "${hard_count}"
+
+  if [ "${hard_count}" -gt 0 ]; then
+    echo "error: hard file-size limit exceeded" >&2
+    exit 1
+  fi
+}
+
+echo "[bmx][test] cargo fmt --check"
+cargo fmt --all -- --check
+
+echo "[bmx][test] cargo clippy"
+cargo clippy --all-targets -- -D warnings
+
+echo "[bmx][test] file-size limits"
+check_file_sizes
+
+echo "[bmx][test] cargo test"
+cargo test
+
+if ! command -v cargo-llvm-cov >/dev/null 2>&1; then
+  echo "[bmx][test] install cargo-llvm-cov"
+  cargo install cargo-llvm-cov --locked
+fi
+
+echo "[bmx][test] coverage >= 90%"
+cargo llvm-cov --workspace --all-features --fail-under-lines 90 --summary-only
