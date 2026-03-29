@@ -61,6 +61,12 @@ cargo fmt --all -- --check
 echo "[bmx][test] cargo clippy"
 cargo clippy --all-targets -- -D warnings
 
+echo "[bmx][test] trunk fmt --all"
+trunk fmt --all
+
+echo "[bmx][test] trunk check --all"
+trunk check --all
+
 echo "[bmx][test] file-size limits"
 check_file_sizes
 
