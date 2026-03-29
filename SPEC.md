@@ -4,7 +4,9 @@
 
 bmx is a language-agnostic CLI that installs, builds, and runs software from source repositories. Invoking `bmx <app-or-repo>` installs if needed and runs the app; all managed state lives in a local cache under the user’s home directory.
 
-Commands: `bmx <app> [-- …]` (optional `--rm`, `--pin`, `-v` / `--verbose`); `bmx exec <app> [-- …]` or `bmx exec --pin` when `.bmx/pin` defines the app; `bmx install [--as NAME]|uninstall|reinstall|self-update|update`; `bmx show <app> [--would-remove]`; `bmx history [-n N]`; `bmx undo [ID] [--only APP]`; `bmx source set-default|show`; `bmx isolation set-default|show`; `bmx checkout set-default|show`; `bmx shim init|path|add`; `bmx doctor`.
+Commands: `bmx <app> [-- …]` (optional `--rm`, `--pin`, `-v` / `--verbose`); `bmx exec <app> [-- …]` or `bmx exec --pin` when `.bmx/pin` defines the app; `bmx install [--as NAME]|uninstall|reinstall|self-update|update`; `bmx show <app> [--would-remove]`; `bmx search [WORDS …] [--backend auto|github|gitlab|aur|homebrew] [-n N] [--forks] [--url] [--no-probe]`; `bmx history [-n N]`; `bmx undo [ID] [--only APP]`; `bmx source set-default|show`; `bmx isolation set-default|show`; `bmx checkout set-default|show`; `bmx shim init|path|add`; `bmx doctor`.
+
+**Search:** discovers installable sources without cloning. `--backend auto` uses the GitHub or GitLab host from `default_source` (or `BMX_GITHUB_API_BASE`). GitHub/GitLab hits are optionally filtered with `--no-probe` off (default): one REST call per candidate lists the repository root; results must contain a root file bmx already recognizes (`Cargo.toml`, `CMakeLists.txt`, `PKGBUILD`, `Brewfile`, `Makefile`/`makefile`, `bmx.toml`, or a `.rb` formula stub). `--backend aur` queries the AUR RPC (clone URL `https://aur.archlinux.org/<PackageBase>.git`, always PKGBUILD-based). `--backend homebrew` reads `formulae.brew.sh/api/formula.json` and keeps formulas whose homepage (or stable tarball URL) maps to a GitHub/GitLab clone URL bmx can use.
 
 bmx is not a language-specific package manager: no `package.json`, npm client, or bundled JavaScript runtime. Optional `[registries]` entries in `config.toml` are git URL aliases only, not npm/gem/cargo indices.
 
@@ -52,7 +54,7 @@ Install resolves the source, clones or syncs the cache, checks out the requested
 
 ## History and undo
 
-`bmx history` prints recent entries from `audit.log.jsonl` (id, unix time, kind, undoable flag, summary). **`--rm` runs do not write** history or undo data (ephemeral home only).
+`bmx history` prints recent entries from `audit.log.jsonl` (id, unix time, kind, undoable flag, summary, and **`source_url`** when recorded — the resolved git remote from `install.toml`). Older log lines without `source_url` deserialize with that column empty. **`--rm` runs do not write** history or undo data (ephemeral home only).
 
 **Undoable** steps record a marker in `undo-stack.json` and (for mutations of existing installs) a directory under `snapshots/` holding the previous `install.toml` and `git_head.txt` (HEAD before the operation):
 

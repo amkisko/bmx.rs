@@ -22,6 +22,9 @@ pub(crate) struct AuditEntry {
     pub(crate) summary: String,
     #[serde(default)]
     pub(crate) app: Option<String>,
+    /// Resolved git remote URL stored in `install.toml` (`source_url`) when applicable.
+    #[serde(default)]
+    pub(crate) source_url: Option<String>,
     #[serde(default)]
     pub(crate) undoable: bool,
 }
@@ -225,6 +228,7 @@ pub(crate) fn undo(home: &Path, id: Option<&str>, cli_verbose: bool, record: boo
             kind: "undo".into(),
             summary: format!("undo {}", frame.id),
             app: None,
+            source_url: None,
             undoable: false,
         },
         record,
@@ -302,6 +306,7 @@ pub(crate) fn undo_one_app(
                 UndoItem::RestoreSnapshot { app_id, .. } => Some(app_id.clone()),
                 UndoItem::FreshInstall { .. } => None,
             }),
+            source_url: None,
             undoable: false,
         },
         record,

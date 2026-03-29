@@ -153,6 +153,7 @@ pub(crate) fn install_app(
             merged.rust_package = spec.cargo_package.clone();
         }
         let app_id = merged.app.clone();
+        let source_url = merged.source_url.clone();
         let snapshot_dir = capture_install_snapshot(home, &app_id)?;
         reinstall_from_meta(home, merged, cli_verbose)?;
         let id = new_action_id();
@@ -164,6 +165,7 @@ pub(crate) fn install_app(
                 kind: "update".into(),
                 summary: format!("update {app}"),
                 app: Some(app_id.clone()),
+                source_url: Some(source_url),
                 undoable: true,
             },
             record_history,
@@ -228,6 +230,7 @@ pub(crate) fn install_app(
             kind: "install".into(),
             summary: format!("install {app}"),
             app: Some(app_id.clone()),
+            source_url: Some(metadata.source_url.clone()),
             undoable: true,
         },
         record_history,
@@ -254,6 +257,7 @@ pub(crate) fn reinstall_app(
     let layout = resolve_installed_layout(home, app)?;
     let meta: InstallMetadata = read_toml(&layout.meta_file)?;
     let app_id = meta.app.clone();
+    let source_url = meta.source_url.clone();
     let snapshot_dir = capture_install_snapshot(home, &app_id)?;
     reinstall_from_meta(home, meta, cli_verbose)?;
     let id = new_action_id();
@@ -265,6 +269,7 @@ pub(crate) fn reinstall_app(
             kind: "reinstall".into(),
             summary: format!("reinstall {app}"),
             app: Some(app_id.clone()),
+            source_url: Some(source_url),
             undoable: true,
         },
         record_history,
@@ -353,6 +358,7 @@ pub(crate) fn self_update(
             kind: "self-update".into(),
             summary: format!("self-update {app}"),
             app: Some(metadata.app.clone()),
+            source_url: Some(metadata.source_url.clone()),
             undoable: false,
         },
         record_history,
@@ -435,6 +441,14 @@ pub(crate) fn uninstall_app(home: &Path, app: &str, record_history: bool) -> Res
         .parent()
         .ok_or_else(|| anyhow!("invalid app layout for {}", layout.id))?;
 
+    let source_url = if layout.meta_file.exists() {
+        read_toml::<InstallMetadata>(&layout.meta_file)
+            .ok()
+            .map(|m| m.source_url)
+    } else {
+        None
+    };
+
     append_audit(
         home,
         &AuditEntry {
@@ -443,6 +457,7 @@ pub(crate) fn uninstall_app(home: &Path, app: &str, record_history: bool) -> Res
             kind: "uninstall".into(),
             summary: format!("uninstall {app}"),
             app: Some(layout.id.clone()),
+            source_url,
             undoable: false,
         },
         record_history,
@@ -499,6 +514,7 @@ pub(crate) fn update_all(home: &Path, cli_verbose: bool, record_history: bool) -
             kind: "update-all".into(),
             summary: format!("update all ({n} apps)"),
             app: None,
+            source_url: None,
             undoable: true,
         },
         record_history,

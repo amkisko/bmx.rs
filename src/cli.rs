@@ -1,4 +1,4 @@
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 
 #[derive(Parser, Debug)]
 #[command(name = "bmx")]
@@ -79,6 +79,23 @@ pub(crate) enum Commands {
         command: ShimCommands,
     },
     Doctor,
+    /// Search for sources bmx can install: GitHub/GitLab (with optional root-file probe), AUR, or Homebrew (homepage → git URL).
+    Search {
+        /// Words passed to the search backend (combined with spaces).
+        #[arg(required = true, num_args = 1..)]
+        query: Vec<String>,
+        #[arg(long, value_enum, default_value_t = SearchBackendArg::Auto)]
+        backend: SearchBackendArg,
+        #[arg(short = 'n', long, default_value_t = 20)]
+        limit: usize,
+        #[arg(long)]
+        forks: bool,
+        #[arg(long)]
+        url: bool,
+        /// List GitHub/GitLab hits without checking the API for root build files (Cargo.toml, PKGBUILD, …).
+        #[arg(long)]
+        no_probe: bool,
+    },
     /// Show recent logged actions (see `bmx undo`).
     History {
         #[arg(short = 'n', long, default_value_t = 30)]
@@ -125,4 +142,19 @@ pub(crate) enum IsolationCommands {
 pub(crate) enum CheckoutCommands {
     SetDefault { backend: String },
     Show,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, ValueEnum)]
+pub(crate) enum SearchBackendArg {
+    /// Use `default_source` host (GitHub or GitLab API).
+    #[default]
+    Auto,
+    /// GitHub repository search (`api.github.com`); short names resolve against `https://github.com`.
+    Github,
+    /// GitLab project search on `default_source` origin.
+    Gitlab,
+    /// AUR RPC (`aur.archlinux.org`); each hit is a PKGBUILD git clone URL.
+    Aur,
+    /// Homebrew formula index (`formulae.brew.sh`); only formulas whose homepage maps to a cloneable git URL.
+    Homebrew,
 }

@@ -83,8 +83,13 @@ pub(crate) fn dispatch(cli: Cli, home: &Path) -> Result<()> {
         Some(Commands::History { limit }) => {
             for e in list_recent_audit(home, limit)? {
                 println!(
-                    "{}  {}  {}  undoable={}  {}",
-                    e.id, e.ts, e.kind, e.undoable, e.summary
+                    "{}  {}  {}  undoable={}  {}  {}",
+                    e.id,
+                    e.ts,
+                    e.kind,
+                    e.undoable,
+                    e.summary,
+                    e.source_url.as_deref().unwrap_or("-"),
                 );
             }
             Ok(())
@@ -100,6 +105,14 @@ pub(crate) fn dispatch(cli: Cli, home: &Path) -> Result<()> {
             }
         }
         Some(Commands::Doctor) => doctor(home),
+        Some(Commands::Search {
+            query,
+            backend,
+            limit,
+            forks,
+            url,
+            no_probe,
+        }) => crate::search::run_search(home, &query, backend, limit, forks, url, !no_probe),
         None => {
             let cwd = std::env::current_dir()?;
             if cli.pin {

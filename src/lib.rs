@@ -16,6 +16,7 @@ mod ops;
 mod pin;
 mod process;
 mod repo;
+mod search;
 mod revision;
 mod runtime;
 mod shim;
