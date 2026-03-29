@@ -121,6 +121,14 @@ pub(super) fn dispatch_trust(
             );
             Ok(())
         }
+        TrustCommands::RemoveKey { key, match_prefix } => {
+            crate::trust::remove_allowed_signing_key(home, &key, match_prefix.as_deref())?;
+            println!(
+                "removed signing key from {}",
+                match_prefix.as_deref().unwrap_or("<default>")
+            );
+            Ok(())
+        }
         TrustCommands::SetSigned {
             match_prefix,
             enabled,
@@ -175,8 +183,12 @@ fn import_signing_keys_from_any(
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_nanos())
         .unwrap_or(0);
-    let tmp_root =
-        std::env::temp_dir().join(format!("bmx-trust-import-{}-{}", std::process::id(), stamp));
+    let tmp_root = std::env::temp_dir().join(format!(
+        "{}{}-{}",
+        crate::workspace::TEMP_DIR_PREFIX_TRUST_IMPORT,
+        std::process::id(),
+        stamp
+    ));
     let repo_dir: PathBuf = tmp_root.join("repo");
     std::fs::create_dir_all(&repo_dir)?;
 

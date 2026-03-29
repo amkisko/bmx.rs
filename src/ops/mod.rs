@@ -1,3 +1,4 @@
+mod clean;
 mod doctor;
 mod install;
 mod package;
@@ -7,6 +8,7 @@ mod selfexe;
 mod uninstall;
 mod update;
 
+pub(crate) use clean::clean_temp_artifacts;
 pub(crate) use doctor::doctor;
 pub(crate) use install::install_app;
 pub(crate) use package::show_package;

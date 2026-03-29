@@ -2,6 +2,8 @@
 mod args_debug_history;
 #[path = "cli/batch_show_collision.rs"]
 mod batch_show_collision;
+#[path = "cli/clean_temp.rs"]
+mod clean_temp;
 #[path = "cli/install_file_url.rs"]
 mod install_file_url;
 #[path = "cli/smoke_config.rs"]

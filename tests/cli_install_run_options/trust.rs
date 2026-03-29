@@ -52,6 +52,39 @@ fn trust_policy_allows_explicit_prefix_when_default_denies() {
 }
 
 #[test]
+fn trust_remove_key_roundtrip() {
+    let home = TempDir::new().expect("home");
+
+    bmx(home.path())
+        .args([
+            "trust",
+            "add-key",
+            "FEEDFACE",
+            "--match-prefix",
+            "https://github.com/acme/",
+        ])
+        .assert()
+        .success();
+
+    bmx(home.path())
+        .args([
+            "trust",
+            "revoke",
+            "feedface",
+            "--match-prefix",
+            "https://github.com/acme/",
+        ])
+        .assert()
+        .success();
+
+    bmx(home.path())
+        .args(["trust", "show"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("FEEDFACE").not());
+}
+
+#[test]
 fn trust_add_key_and_show_roundtrip() {
     let home = TempDir::new().expect("home");
 
@@ -166,6 +199,29 @@ fn trust_import_repo_from_source_without_install_attempts_temp_checkout() {
             "no commit signing key/fingerprint found",
         ))
         .stderr(predicate::str::contains("not installed").not());
+}
+
+#[test]
+fn rm_honors_persistent_trust_policy() {
+    let home = TempDir::new().expect("home");
+    let repos = TempDir::new().expect("repos");
+    let repo = init_make_repo(repos.path(), "rm-trust-blocked", "rm-trust-blocked", "X");
+    let app = format!("file://{}", repo.display());
+
+    fs::create_dir_all(home.path().join(".bmx")).expect("bmx home");
+    fs::write(
+        home.path().join(".bmx/trust.toml"),
+        "[default]\nallow = false\n",
+    )
+    .expect("write trust policy");
+
+    bmx(home.path())
+        .args(["--rm", "install", &app])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "source is blocked by trust policy",
+        ));
 }
 
 #[test]

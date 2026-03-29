@@ -8,8 +8,8 @@ use crate::cli::{Cli, Commands, ShimCommands};
 use crate::history::{list_recent_audit, undo, undo_one_app};
 use crate::layout::resolve_installed_layout;
 use crate::ops::{
-    TrustOptions, doctor, install_app, rebuild_app, reinstall_app, run_app, self_update,
-    show_package, uninstall_app, update_all,
+    TrustOptions, clean_temp_artifacts, doctor, install_app, rebuild_app, reinstall_app, run_app,
+    self_update, show_package, uninstall_app, update_all,
 };
 
 use subdispatch::{
@@ -179,6 +179,7 @@ pub(crate) fn dispatch(cli: Cli, home: &Path) -> Result<()> {
             }
         }
         Some(Commands::Doctor) => doctor(home),
+        Some(Commands::Clean { dry_run }) => clean_temp_artifacts(dry_run, cli.verbose),
         Some(Commands::Search {
             query,
             backend,

@@ -38,7 +38,7 @@ pub fn run() -> Result<()> {
     let cli = Cli::parse();
     let persistent_home = bmx_home()?;
     let ephemeral = if cli.rm {
-        Some(workspace::ephemeral_bmx_home()?)
+        Some(workspace::ephemeral_bmx_home(&persistent_home)?)
     } else {
         None
     };

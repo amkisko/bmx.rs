@@ -119,6 +119,34 @@ pub(crate) fn add_allowed_signing_key(
     save_policy(home, &policy)
 }
 
+pub(crate) fn remove_allowed_signing_key(
+    home: &Path,
+    key: &str,
+    match_prefix: Option<&str>,
+) -> Result<()> {
+    let key = normalize_key(key);
+    if key.is_empty() {
+        bail!("signing key is empty");
+    }
+
+    let mut policy = load_policy_or_default(home)?;
+    let rule = if let Some(prefix) = match_prefix {
+        mutable_rule_for_match_prefix(&mut policy, prefix)
+    } else {
+        &mut policy.default
+    };
+    let before = rule.allowed_signing_keys.len();
+    rule.allowed_signing_keys
+        .retain(|k| normalize_key(k) != key);
+    if rule.allowed_signing_keys.len() == before {
+        bail!(
+            "signing key not found in allowed_signing_keys for {}",
+            match_prefix.unwrap_or("<default>")
+        );
+    }
+    save_policy(home, &policy)
+}
+
 pub(crate) fn set_require_signed_commit(
     home: &Path,
     match_prefix: &str,

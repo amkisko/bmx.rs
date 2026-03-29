@@ -147,8 +147,12 @@ fn load_entries_from_repo(
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_nanos())
         .unwrap_or(0);
-    let tmp_root =
-        std::env::temp_dir().join(format!("bmx-trust-check-{}-{}", std::process::id(), stamp));
+    let tmp_root = std::env::temp_dir().join(format!(
+        "{}{}-{}",
+        crate::workspace::TEMP_DIR_PREFIX_TRUST_CHECK,
+        std::process::id(),
+        stamp
+    ));
     let repo_dir: PathBuf = tmp_root.join("repo");
     fs::create_dir_all(&repo_dir)?;
 

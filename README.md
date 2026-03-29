@@ -93,6 +93,7 @@ bmx trust list --global          # only global/default trust scope
 bmx trust list --local           # only local/source-scoped rules
 bmx trust list my-app            # trust view filtered to installed app source
 bmx trust add-key KEYID_OR_FINGERPRINT [--match-prefix PREFIX]
+bmx trust remove-key KEYID_OR_FINGERPRINT [--match-prefix PREFIX]   # alias: bmx trust revoke …
 bmx trust set-signed --match-prefix PREFIX [--enabled true|false]
 bmx trust set-allow --match-prefix PREFIX [--allow true|false]
 bmx trust import-repo APP [--match-prefix PREFIX]
@@ -136,6 +137,10 @@ Even without `--trust`, install/update/rebuild/reinstall/self-update require exp
 SSH-signature checks are scoped to `bmx` git subprocesses by using per-source allowed signers files under `$BMX_HOME/trust/allowed_signers/`, so `bmx` does not modify your global git config.
 
 For CI/non-interactive pipelines, set `BMX_TRUST_ASSUME_YES=1` to auto-consent these trust prompts. Use this only in controlled automation contexts.
+
+`--rm` uses a temporary `BMX_HOME` for caches and installs, but still loads **`$HOME/.bmx/trust.toml`** and **`$HOME/.bmx/trust/`** (copy at process start) so your signer allowlists and deny rules apply; general `config.toml` stays ephemeral defaults.
+
+To delete orphaned temp trees (e.g. after a crash), run **`bmx clean`** (`--dry-run` lists what would be removed). This only removes directories named `bmx-ephemeral-*`, `bmx-trust-import-*`, or `bmx-trust-check-*` directly under the system temp directory.
 
 ## Development
 

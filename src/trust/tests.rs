@@ -5,8 +5,8 @@ use crate::io::write_toml;
 use crate::types::InstallMetadata;
 
 use super::commands::{
-    TrustListScope, add_allowed_signing_key, import_signing_keys_from_repo, list_policy, set_allow,
-    set_require_signed_commit,
+    TrustListScope, add_allowed_signing_key, import_signing_keys_from_repo, list_policy,
+    remove_allowed_signing_key, set_allow, set_require_signed_commit,
 };
 use super::enforce::enforce_source_trust;
 use super::git_env::{trust_allowed_signers_path, trust_git_env};
@@ -99,6 +99,17 @@ fn trust_allowed_signers_path_is_source_scoped() {
     let a = trust_allowed_signers_path(home.path(), "https://github.com/acme/a.git");
     let b = trust_allowed_signers_path(home.path(), "https://github.com/acme/b.git");
     assert_ne!(a, b);
+}
+
+#[test]
+fn remove_key_drops_normalized_entry() {
+    let home = tempfile::tempdir().unwrap();
+    let prefix = "https://github.com/acme/";
+    add_allowed_signing_key(home.path(), "AbCd1234", Some(prefix)).unwrap();
+    remove_allowed_signing_key(home.path(), "abcd1234", Some(prefix)).unwrap();
+    let policy = load_policy_or_default(home.path()).unwrap();
+    let r = best_rule(&policy, "https://github.com/acme/tool.git");
+    assert!(r.allowed_signing_keys.is_empty());
 }
 
 #[test]

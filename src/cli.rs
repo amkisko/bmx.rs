@@ -99,6 +99,12 @@ pub(crate) enum Commands {
         command: ShimCommands,
     },
     Doctor,
+    /// Remove leftover bmx directories under the system temp folder (`bmx-ephemeral-*`, `bmx-trust-import-*`, `bmx-trust-check-*`).
+    Clean {
+        /// List matching directories without deleting.
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Search for sources bmx can install: GitHub/GitLab (with optional root-file probe), AUR, or Homebrew (homepage → git URL).
     Search {
         /// Words passed to the search backend (combined with spaces).
@@ -178,6 +184,13 @@ pub(crate) enum TrustCommands {
     Show,
     /// Add an allowed signer key/fingerprint to default or a matching prefix rule.
     AddKey {
+        key: String,
+        #[arg(long = "match-prefix")]
+        match_prefix: Option<String>,
+    },
+    /// Remove an allowed signer key/fingerprint from default or a matching prefix rule (same scope as `add-key`).
+    #[command(visible_alias = "revoke")]
+    RemoveKey {
         key: String,
         #[arg(long = "match-prefix")]
         match_prefix: Option<String>,
