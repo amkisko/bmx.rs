@@ -6,7 +6,7 @@ Command-line tool that installs, builds, and runs software from source repositor
 
 For behaviour, commands, storage layout, and limits, see [SPEC.md](SPEC.md).
 
-## Build
+## Build and install
 
 From a checkout:
 
@@ -38,7 +38,7 @@ User-local install without touching `/usr/local`:
 
 ## Usage
 
-### Installs and rebuilds
+### Build
 
 Each install lives in `~/.bmx/apps/<id>/` (`repo/` is the clone, `install.toml` is metadata). On install or first run, bmx resolves the spec (bare name, `owner/repo`, URL, `registry:repo`, `name@ref` / semver), syncs git, checks out the ref, picks a stack (Rust → CMake → Make → Homebrew → AUR), builds, then stores the executable. Per-repo `bmx.toml` can set `strategy`, `workdir`, `run`, and `[bmx.hooks]` (`pre_run`, `post_install`). Workspace members: `owner/repo.rs:crate@ref`. Host vs Docker/Podman/nerdctl: `bmx isolation`; optional `integrity_check` in `config.toml` compares live HEAD to metadata on run.
 
