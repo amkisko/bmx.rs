@@ -30,6 +30,12 @@ use crate::trust::{
 };
 use crate::types::{Config, InstallMetadata};
 
+#[derive(Clone, Copy)]
+pub(crate) struct TrustOptions {
+    pub(crate) prompt: bool,
+    pub(crate) global: bool,
+}
+
 fn install_refers_to_existing(
     cfg: &Config,
     spec: &AppSpec,
@@ -70,8 +76,10 @@ pub(crate) fn run_app(
             verbose,
             false,
             persist_requested_ref,
-            false,
-            false,
+            TrustOptions {
+                prompt: false,
+                global: false,
+            },
         )?;
     }
 
@@ -95,8 +103,10 @@ pub(crate) fn run_app(
             verbose,
             false,
             persist_requested_ref,
-            false,
-            false,
+            TrustOptions {
+                prompt: false,
+                global: false,
+            },
         )?;
         let layout = resolve_layout_for_run(home, app);
         metadata = read_toml(&layout.meta_file)?;
@@ -154,8 +164,7 @@ pub(crate) fn install_app(
     cli_verbose: bool,
     record_history: bool,
     persist_requested_ref: bool,
-    trust_prompt: bool,
-    trust_global: bool,
+    trust: TrustOptions,
 ) -> Result<()> {
     let spec = parse_app_spec(app);
     let cfg = load_config(home)?;
@@ -199,7 +208,7 @@ pub(crate) fn install_app(
         let app_id = merged.app.clone();
         let source_url = merged.source_url.clone();
         let snapshot_dir = capture_install_snapshot(home, &app_id)?;
-        reinstall_from_meta(home, merged, cli_verbose, trust_prompt, trust_global)?;
+        reinstall_from_meta(home, merged, cli_verbose, trust.prompt, trust.global)?;
         if !persist_requested_ref {
             let mut refreshed: InstallMetadata = read_toml(&layout.meta_file)?;
             refreshed.requested_ref = persisted_requested_ref;
@@ -243,8 +252,8 @@ pub(crate) fn install_app(
     let resolved_commit =
         checkout_requested_ref(&layout.repo_dir, spec.requested_ref.as_deref(), cli_verbose)?;
     prompt_untrusted_source_consent(home, &source_url, &layout.repo_dir)?;
-    if trust_prompt {
-        prompt_import_signing_keys_for_source(home, &source_url, &layout.repo_dir, trust_global)?;
+    if trust.prompt {
+        prompt_import_signing_keys_for_source(home, &source_url, &layout.repo_dir, trust.global)?;
     }
     enforce_source_trust(home, &source_url, &layout.repo_dir)?;
 
@@ -357,8 +366,7 @@ pub(crate) fn rebuild_app(
     cli_verbose: bool,
     record_history: bool,
     persist_requested_ref: bool,
-    trust_prompt: bool,
-    trust_global: bool,
+    trust: TrustOptions,
 ) -> Result<()> {
     if install {
         return install_app(
@@ -368,8 +376,7 @@ pub(crate) fn rebuild_app(
             cli_verbose,
             record_history,
             persist_requested_ref,
-            trust_prompt,
-            trust_global,
+            trust,
         );
     }
 
@@ -394,8 +401,8 @@ pub(crate) fn rebuild_app(
     sync_repo(&source_url, &layout.repo_dir, &cfg, cli_verbose)?;
     checkout_requested_ref(&layout.repo_dir, requested_ref.as_deref(), cli_verbose)?;
     prompt_untrusted_source_consent(home, &source_url, &layout.repo_dir)?;
-    if trust_prompt {
-        prompt_import_signing_keys_for_source(home, &source_url, &layout.repo_dir, trust_global)?;
+    if trust.prompt {
+        prompt_import_signing_keys_for_source(home, &source_url, &layout.repo_dir, trust.global)?;
     }
     enforce_source_trust(home, &source_url, &layout.repo_dir)?;
 
@@ -470,8 +477,10 @@ pub(crate) fn self_update(
         cli_verbose,
         false,
         true,
-        trust_prompt,
-        trust_global,
+        TrustOptions {
+            prompt: trust_prompt,
+            global: trust_global,
+        },
     )?;
 
     let layout = resolve_layout_for_run(home, app);

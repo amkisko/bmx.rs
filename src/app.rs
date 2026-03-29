@@ -10,8 +10,8 @@ use crate::config::{load_config, save_config};
 use crate::history::{list_recent_audit, undo, undo_one_app};
 use crate::layout::resolve_installed_layout;
 use crate::ops::{
-    doctor, install_app, rebuild_app, reinstall_app, run_app, self_update, show_package,
-    uninstall_app, update_all,
+    TrustOptions, doctor, install_app, rebuild_app, reinstall_app, run_app, self_update,
+    show_package, uninstall_app, update_all,
 };
 use crate::source::normalize_source_base;
 use crate::types::{BuildIsolation, CheckoutBackend};
@@ -47,8 +47,10 @@ pub(crate) fn dispatch(cli: Cli, home: &Path) -> Result<()> {
                 cli.verbose,
                 record,
                 cli.pin,
-                cli.trust,
-                cli.trust_global,
+                TrustOptions {
+                    prompt: cli.trust,
+                    global: cli.trust_global,
+                },
             )?;
             println!("installed {app}");
             Ok(())
@@ -78,8 +80,10 @@ pub(crate) fn dispatch(cli: Cli, home: &Path) -> Result<()> {
                 cli.verbose,
                 record,
                 cli.pin,
-                cli.trust,
-                cli.trust_global,
+                TrustOptions {
+                    prompt: cli.trust,
+                    global: cli.trust_global,
+                },
             )?;
             if install {
                 println!("rebuilt and installed {spec}");
@@ -116,8 +120,10 @@ pub(crate) fn dispatch(cli: Cli, home: &Path) -> Result<()> {
                     cli.verbose,
                     record,
                     cli.pin,
-                    cli.trust,
-                    cli.trust_global,
+                    TrustOptions {
+                        prompt: cli.trust,
+                        global: cli.trust_global,
+                    },
                 )?;
                 println!("updated {app_name}");
                 Ok(())

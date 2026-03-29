@@ -369,24 +369,26 @@ mod tests {
 
     #[test]
     fn resolve_checkout_plan_applies_matching_profile() {
-        let mut cfg = Config::default();
-        cfg.checkout_backend = CheckoutBackend::Git;
-        cfg.checkout_profiles = vec![CheckoutProfile {
-            name: Some("acme".into()),
-            match_prefix: "https://github.com/acme/".into(),
-            backend: Some(CheckoutBackend::Custom),
-            env: vec![EnvVar {
-                key: "A".into(),
-                value: "B".into(),
+        let cfg = Config {
+            checkout_backend: CheckoutBackend::Git,
+            checkout_profiles: vec![CheckoutProfile {
+                name: Some("acme".into()),
+                match_prefix: "https://github.com/acme/".into(),
+                backend: Some(CheckoutBackend::Custom),
+                env: vec![EnvVar {
+                    key: "A".into(),
+                    value: "B".into(),
+                }],
+                ssh_command: Some("ssh -i /k".into()),
+                http_proxy: Some("http://p".into()),
+                https_proxy: Some("https://p".into()),
+                all_proxy: Some("socks5://p".into()),
+                no_proxy: Some("localhost".into()),
+                custom_clone: Some("echo clone".into()),
+                custom_sync: Some("echo sync".into()),
             }],
-            ssh_command: Some("ssh -i /k".into()),
-            http_proxy: Some("http://p".into()),
-            https_proxy: Some("https://p".into()),
-            all_proxy: Some("socks5://p".into()),
-            no_proxy: Some("localhost".into()),
-            custom_clone: Some("echo clone".into()),
-            custom_sync: Some("echo sync".into()),
-        }];
+            ..Default::default()
+        };
 
         let plan = resolve_checkout_plan(&cfg, "https://github.com/acme/tool.git").unwrap();
         assert_eq!(plan.backend, CheckoutBackend::Custom);
@@ -452,7 +454,7 @@ mod tests {
         run_git(&src, &["remote", "add", "origin", origin.to_str().unwrap()]);
         run_git(&src, &["push", "-u", "origin", "HEAD"]);
         run_git(
-            &td.path().to_path_buf(),
+            td.path(),
             &["clone", origin.to_str().unwrap(), clone.to_str().unwrap()],
         );
 

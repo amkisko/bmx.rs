@@ -722,8 +722,10 @@ mod tests {
 
     #[test]
     fn source_and_remote_detection_helpers() {
-        let mut cfg = Config::default();
-        cfg.default_source = Some("https://github.com".into());
+        let cfg = Config {
+            default_source: Some("https://github.com".into()),
+            ..Default::default()
+        };
         assert!(install_hint_resolves(&cfg, "owner/repo").unwrap());
         assert!(looks_like_any_git_remote("https://example.com/x.git"));
         assert!(looks_like_any_git_remote("git@github.com:a/b.git"));
