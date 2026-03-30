@@ -78,7 +78,8 @@ bmx self-update SOURCE            # replace the bmx binary
 ```bash
 bmx source set-default URL && bmx source show
 bmx checkout set-default BACKEND && bmx checkout show   # git | gh | custom
-bmx isolation set-default MODE && bmx isolation show    # off | auto | docker | …
+bmx isolation set-default MODE && bmx isolation show        # build: off | auto | docker | …
+bmx isolation set-default-run MODE && bmx isolation show-run # run: off | auto | docker | …
 ```
 
 Optional `[registries]` in `~/.bmx/config.toml` (URL aliases). Undo: `bmx history`, then `bmx undo`, `bmx undo ID`, or `bmx undo --only APP` after a mass update. Shims (Unix): `bmx shim init`, `bmx shim path`, `bmx shim add APP`. No persistent state: add `--rm` to any invocation (temp `BMX_HOME`).
@@ -126,6 +127,8 @@ bmx APP -- ARGS                    # install-if-needed, then run (forward args a
 bmx exec APP -- ARGS
 bmx exec --pin -- ARGS             # app line from .bmx/pin (walks parents)
 bmx APP --pin -- ARGS              # same, default command
+bmx --isolate-run APP -- ARGS      # run this invocation in container isolation (auto backend)
+bmx --no-isolate-run APP -- ARGS   # force host run this invocation
 ```
 
 `-v` / `--verbose` prints app id, commit, and binary path; the child prepends that binary’s directory to `PATH`. With `integrity_check = true`, run/exec can verify the checkout matches `install.toml`. Details: `bmx --help` and [SPEC.md](SPEC.md).

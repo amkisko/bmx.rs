@@ -73,6 +73,7 @@ fn load_config_defaults_when_config_file_is_missing() {
     let cfg = load_config(tmp.path()).expect("load default");
     assert_eq!(cfg.default_source.as_deref(), Some("https://github.com"));
     assert_eq!(cfg.build_isolation, BuildIsolation::Off);
+    assert_eq!(cfg.run_isolation, BuildIsolation::Off);
     assert_eq!(cfg.checkout_backend, crate::types::CheckoutBackend::Git);
     assert!(cfg.checkout_profiles.is_empty());
     assert!(!cfg.integrity_check);

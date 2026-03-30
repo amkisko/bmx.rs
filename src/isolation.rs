@@ -1,4 +1,5 @@
 use std::path::Path;
+use std::process::{Command, ExitStatus};
 
 use anyhow::{Result, anyhow, bail};
 
@@ -59,6 +60,42 @@ pub(crate) fn resolve_backend(mode: BuildIsolation) -> Result<&'static str> {
             )
         }
     }
+}
+
+pub(crate) fn run_app_in_isolation(
+    cwd: &Path,
+    executable_rel: &str,
+    app_args: &[String],
+    mode: BuildIsolation,
+) -> Result<ExitStatus> {
+    let backend = resolve_backend(mode)?;
+    let mount = format!("{}:/workspace", cwd.display());
+    let image = std::env::var("BMX_ISOLATION_IMAGE")
+        .unwrap_or_else(|_| "ghcr.io/catthehacker/ubuntu:full-latest".to_string());
+    let executable = format!("/workspace/{executable_rel}");
+    let app_args_refs: Vec<&str> = app_args.iter().map(String::as_str).collect();
+    let shell_cmd = shell_join(&executable, &app_args_refs);
+
+    let status = Command::new(backend)
+        .args([
+            "run",
+            "--rm",
+            "-v",
+            &mount,
+            "-w",
+            "/workspace",
+            &image,
+            "sh",
+            "-lc",
+            &shell_cmd,
+        ])
+        .status()
+        .map_err(|err| {
+            anyhow!(
+                "{err}. isolated run backend `{backend}` uses image `{image}`; override with BMX_ISOLATION_IMAGE if required runtime deps are missing"
+            )
+        })?;
+    Ok(status)
 }
 
 fn require_tool(tool: &'static str) -> Result<&'static str> {
@@ -145,6 +182,15 @@ mod tests {
                 false
             )
             .is_err()
+        );
+    }
+
+    #[test]
+    fn shell_join_quotes_runtime_args() {
+        let joined = shell_join("/workspace/bin/tool", &["a b", "x'y"]);
+        assert_eq!(
+            joined,
+            "'/workspace/bin/tool' 'a b' 'x'\"'\"'y'".to_string()
         );
     }
 }

@@ -4,7 +4,7 @@
 
 bmx is a language-agnostic CLI that installs, builds, and runs software from source repositories. Invoking `bmx <app-or-repo>` installs if needed and runs the app; all managed state lives in a local cache under the user’s home directory.
 
-Commands: `bmx <app> [-- …]` (optional `--rm`, `--pin`, `--trust`, `--global`, `-v` / `--verbose`); `bmx exec <app> [-- …]` or `bmx exec --pin` when `.bmx/pins.toml` (or legacy `.bmx/pin`) defines the app; `bmx install [--as NAME]|rebuild [--install] [APP]|uninstall|reinstall|self-update|update`; `bmx show <app> [--would-remove]`; `bmx search [WORDS …] [--backend auto|github|gitlab|aur|homebrew] [-n N] [--forks] [--url] [--no-probe]`; `bmx history [-n N]`; `bmx undo [ID] [--only APP]`; `bmx source set-default|show`; `bmx isolation set-default|show`; `bmx checkout set-default|show`; `bmx trust list|show|add-key|remove-key|set-signed|set-allow|import-repo|check` (`remove-key` has alias `revoke`); `bmx shim init|path|add`; `bmx doctor`; `bmx clean [--dry-run]` (delete leftover `bmx-*` dirs under the system temp folder).
+Commands: `bmx <app> [-- …]` (optional `--rm`, `--pin`, `--trust`, `--global`, `-v` / `--verbose`, `--isolate-run`, `--no-isolate-run`); `bmx exec <app> [-- …]` or `bmx exec --pin` when `.bmx/pins.toml` (or legacy `.bmx/pin`) defines the app; `bmx install [--as NAME]|rebuild [--install] [APP]|uninstall|reinstall|self-update|update`; `bmx show <app> [--would-remove]`; `bmx search [WORDS …] [--backend auto|github|gitlab|aur|homebrew] [-n N] [--forks] [--url] [--no-probe]`; `bmx history [-n N]`; `bmx undo [ID] [--only APP]`; `bmx source set-default|show`; `bmx isolation set-default|show|set-default-run|show-run`; `bmx checkout set-default|show`; `bmx trust list|show|add-key|remove-key|set-signed|set-allow|import-repo|check` (`remove-key` has alias `revoke`); `bmx shim init|path|add`; `bmx doctor`; `bmx clean [--dry-run]` (delete leftover `bmx-*` dirs under the system temp folder).
 
 Search: discovers installable sources without cloning. `--backend auto` uses the GitHub or GitLab host from `default_source` (or `BMX_GITHUB_API_BASE`). GitHub/GitLab hits are optionally filtered with `--no-probe` off (default): one REST call per candidate lists the repository root; results must contain a root file bmx already recognizes (`Cargo.toml`, `CMakeLists.txt`, `PKGBUILD`, `Brewfile`, `Makefile`/`makefile`, `bmx.toml`, or a `.rb` formula stub). `--backend aur` queries the AUR RPC (clone URL `https://aur.archlinux.org/<PackageBase>.git`, always PKGBUILD-based). `--backend homebrew` reads `formulae.brew.sh/api/formula.json` and keeps formulas whose homepage (or stable tarball URL) maps to a GitHub/GitLab clone URL bmx can use.
 
@@ -19,6 +19,7 @@ Everything is under `~/.bmx`: `config.toml`, `apps/<app-id>/repo/`, and `apps/<a
 ```toml
 default_source = "https://github.com"
 build_isolation = "off"           # off | auto | docker | podman | nerdctl
+run_isolation = "off"             # off | auto | docker | podman | nerdctl
 checkout_backend = "git"       # git | gh | custom (git2 still accepted as legacy alias)
 checkout_profiles = []
 integrity_check = false           # if true, run/exec compare live HEAD to install.toml
@@ -87,7 +88,7 @@ Checkout and sync use `checkout_backend` in config. Default is `git` (system `gi
 
 ## Install, run, and updates
 
-Install resolves the source, clones or syncs the cache, checks out the requested revision when present, detects build strategy, runs the build, discovers the executable, and writes `install.toml`. Run installs when needed, reinstalls when the requested ref no longer matches metadata, runs the cached binary, and forwards its exit code. Uninstall removes `~/.bmx/apps/<app-id>/`. `bmx update [app]` with no `app` argument runs `sync + checkout + build` for every `install.toml` under `apps/`; with an app argument it does the same for that install only. Self-update builds from a given source and replaces the running `bmx` binary (see platform notes below).
+Install resolves the source, clones or syncs the cache, checks out the requested revision when present, detects build strategy, runs the build, discovers the executable, and writes `install.toml`. Run installs when needed, reinstalls when the requested ref no longer matches metadata, then executes the cached binary on host or in runtime isolation (`run_isolation`, or per-run `--isolate-run` / `--no-isolate-run`) and forwards its exit code. Uninstall removes `~/.bmx/apps/<app-id>/`. `bmx update [app]` with no `app` argument runs `sync + checkout + build` for every `install.toml` under `apps/`; with an app argument it does the same for that install only. Self-update builds from a given source and replaces the running `bmx` binary (see platform notes below).
 
 When `~/.bmx/trust.toml` exists, installs/reinstalls/runs enforce the matching trust rule (longest `match_prefix` wins, else `[default]`): `allow = false` blocks the source; `require_signed_commit = true` requires `git verify-commit HEAD` to pass; if `allowed_signing_keys` is non-empty, the commit signer key/fingerprint must match an entry.
 
@@ -150,6 +151,10 @@ post_install = "./tooling/post-install.sh"
 ## Build isolation
 
 `config.toml` sets persistent isolation: `off` (host build), `auto` (try docker, then podman, then nerdctl), or a specific backend. When enabled, installs and updates run in the container until the setting changes. Image comes from `BMX_ISOLATION_IMAGE` or defaults to `ghcr.io/catthehacker/ubuntu:full-latest`. That default is Linux-oriented; artifacts may not run on macOS/Windows hosts without a matching target strategy.
+
+## Run isolation
+
+`config.toml` also supports `run_isolation` with the same modes (`off`, `auto`, `docker`, `podman`, `nerdctl`). Set it persistently with `bmx isolation set-default-run MODE`; inspect with `bmx isolation show-run`. Per invocation, `--isolate-run` forces `auto` runtime isolation and `--no-isolate-run` forces host execution.
 
 ## Checkout backends and profiles
 

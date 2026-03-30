@@ -27,6 +27,14 @@ pub(crate) struct Cli {
     #[arg(long = "global", global = true)]
     pub(crate) trust_global: bool,
 
+    /// For this run only, execute the installed app inside an isolation backend (`auto`: docker, podman, nerdctl).
+    #[arg(long, global = true, conflicts_with = "no_isolate_run")]
+    pub(crate) isolate_run: bool,
+
+    /// For this run only, force host execution even if default run isolation is enabled.
+    #[arg(long, global = true, conflicts_with = "isolate_run")]
+    pub(crate) no_isolate_run: bool,
+
     #[arg(help = "App/repo name to run (default command)")]
     pub(crate) app: Option<String>,
 
@@ -162,6 +170,8 @@ pub(crate) enum SourceCommands {
 pub(crate) enum IsolationCommands {
     SetDefault { mode: String },
     Show,
+    SetDefaultRun { mode: String },
+    ShowRun,
 }
 
 #[derive(Subcommand, Debug)]

@@ -19,6 +19,13 @@ use subdispatch::{
 
 pub(crate) fn dispatch(cli: Cli, home: &Path) -> Result<()> {
     let record = !cli.rm;
+    let run_isolation_override = if cli.isolate_run {
+        Some(crate::types::BuildIsolation::Auto)
+    } else if cli.no_isolate_run {
+        Some(crate::types::BuildIsolation::Off)
+    } else {
+        None
+    };
     match cli.command {
         Some(Commands::Exec { app, args }) => {
             let cwd = std::env::current_dir()?;
@@ -37,7 +44,14 @@ pub(crate) fn dispatch(cli: Cli, home: &Path) -> Result<()> {
                     )
                 })?
             };
-            run_app(home, &spec, &args, cli.verbose, cli.pin)
+            run_app(
+                home,
+                &spec,
+                &args,
+                cli.verbose,
+                cli.pin,
+                run_isolation_override,
+            )
         }
         Some(Commands::Install { app, install_as }) => {
             require_trust_for_global(cli.trust_global, cli.trust)?;
@@ -194,15 +208,36 @@ pub(crate) fn dispatch(cli: Cli, home: &Path) -> Result<()> {
                 match cli.app.as_deref() {
                     Some(a) => {
                         crate::pin::upsert_pin_in_dir(&cwd, a)?;
-                        run_app(home, a, &cli.args, cli.verbose, cli.pin)
+                        run_app(
+                            home,
+                            a,
+                            &cli.args,
+                            cli.verbose,
+                            cli.pin,
+                            run_isolation_override,
+                        )
                     }
                     None => {
                         let spec = crate::pin::resolve_implicit_pin_spec(&cwd)?;
-                        run_app(home, &spec, &cli.args, cli.verbose, cli.pin)
+                        run_app(
+                            home,
+                            &spec,
+                            &cli.args,
+                            cli.verbose,
+                            cli.pin,
+                            run_isolation_override,
+                        )
                     }
                 }
             } else if let Some(app) = cli.app {
-                run_app(home, &app, &cli.args, cli.verbose, cli.pin)
+                run_app(
+                    home,
+                    &app,
+                    &cli.args,
+                    cli.verbose,
+                    cli.pin,
+                    run_isolation_override,
+                )
             } else {
                 bail!(
                     "provide a command, an app name (e.g. `bmx ripgrep`), or use --pin with `.bmx/pins.toml` / `.bmx/pin`"

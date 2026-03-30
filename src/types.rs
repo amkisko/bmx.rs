@@ -8,6 +8,8 @@ pub(crate) struct Config {
     #[serde(default)]
     pub(crate) build_isolation: BuildIsolation,
     #[serde(default)]
+    pub(crate) run_isolation: BuildIsolation,
+    #[serde(default)]
     pub(crate) checkout_backend: CheckoutBackend,
     #[serde(default)]
     pub(crate) checkout_profiles: Vec<CheckoutProfile>,
@@ -24,6 +26,7 @@ impl Default for Config {
         Self {
             default_source: Some("https://github.com".to_string()),
             build_isolation: BuildIsolation::Off,
+            run_isolation: BuildIsolation::Off,
             checkout_backend: CheckoutBackend::Git,
             checkout_profiles: Vec::new(),
             integrity_check: false,

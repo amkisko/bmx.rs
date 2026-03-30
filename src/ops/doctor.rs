@@ -21,6 +21,7 @@ pub(crate) fn doctor(home: &Path) -> Result<()> {
             .unwrap_or_else(|| "(not set)".to_string())
     );
     println!("build isolation: {}", cfg.build_isolation.as_str());
+    println!("run isolation: {}", cfg.run_isolation.as_str());
     println!("checkout backend: {}", cfg.checkout_backend.as_str());
     println!("integrity_check (config): {}", cfg.integrity_check);
     println!("registries defined: {}", cfg.registries.len());

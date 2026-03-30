@@ -12,6 +12,7 @@ use crate::io::read_toml;
 use crate::layout::resolve_layout_for_run;
 use crate::process::forward_exit;
 use crate::trust::enforce_source_trust;
+use crate::types::BuildIsolation;
 use crate::types::InstallMetadata;
 
 use crate::app_spec::parse_app_spec;
@@ -25,6 +26,7 @@ pub(crate) fn run_app(
     args: &[String],
     verbose: bool,
     persist_requested_ref: bool,
+    run_isolation_override: Option<BuildIsolation>,
 ) -> Result<()> {
     let spec = parse_app_spec(app);
     let layout = resolve_layout_for_run(home, app);
@@ -102,16 +104,25 @@ pub(crate) fn run_app(
 
     hooks::run_pre_run_hook(&layout.repo_dir)?;
 
-    let path_env = path_for_child(&executable);
-    let mut cmd = Command::new(&executable);
-    cmd.current_dir(&layout.repo_dir);
-    cmd.args(args);
-    if let Some(p) = path_env {
-        cmd.env("PATH", p);
-    }
-    let status = cmd
-        .status()
-        .with_context(|| format!("failed to execute {}", executable.display()))?;
+    let run_isolation = run_isolation_override.unwrap_or(cfg.run_isolation);
+    let status = if run_isolation == BuildIsolation::Off {
+        let path_env = path_for_child(&executable);
+        let mut cmd = Command::new(&executable);
+        cmd.current_dir(&layout.repo_dir);
+        cmd.args(args);
+        if let Some(p) = path_env {
+            cmd.env("PATH", p);
+        }
+        cmd.status()
+            .with_context(|| format!("failed to execute {}", executable.display()))?
+    } else {
+        crate::isolation::run_app_in_isolation(
+            &layout.repo_dir,
+            &metadata.executable_rel,
+            args,
+            run_isolation,
+        )?
+    };
     forward_exit(status)
 }
 

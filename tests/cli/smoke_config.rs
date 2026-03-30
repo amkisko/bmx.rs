@@ -64,6 +64,25 @@ fn isolation_set_and_show_work() {
 }
 
 #[test]
+fn run_isolation_set_and_show_work() {
+    let home = TempDir::new().expect("home tempdir");
+
+    bmx(home.path())
+        .args(["isolation", "set-default-run", "auto"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "default run isolation set to auto",
+        ));
+
+    bmx(home.path())
+        .args(["isolation", "show-run"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("auto"));
+}
+
+#[test]
 fn checkout_set_and_show_work() {
     let home = TempDir::new().expect("home tempdir");
 
@@ -93,6 +112,7 @@ fn doctor_runs_and_reports_tools() {
         .stdout(predicate::str::contains("bmx home:"))
         .stdout(predicate::str::contains("default source:"))
         .stdout(predicate::str::contains("build isolation:"))
+        .stdout(predicate::str::contains("run isolation:"))
         .stdout(predicate::str::contains("checkout backend:"))
         .stdout(predicate::str::contains("integrity_check"))
         .stdout(predicate::str::contains("cargo:"));

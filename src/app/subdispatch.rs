@@ -30,6 +30,26 @@ pub(super) fn dispatch_isolation(home: &Path, command: IsolationCommands) -> Res
             println!("{}", cfg.build_isolation.as_str());
             Ok(())
         }
+        IsolationCommands::SetDefaultRun { mode } => {
+            let mode = BuildIsolation::parse(&mode).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "invalid isolation mode `{mode}`; expected one of: off, auto, docker, podman, nerdctl"
+                )
+            })?;
+            let mut cfg = load_config(home)?;
+            cfg.run_isolation = mode;
+            save_config(home, &cfg)?;
+            println!(
+                "default run isolation set to {}",
+                cfg.run_isolation.as_str()
+            );
+            Ok(())
+        }
+        IsolationCommands::ShowRun => {
+            let cfg = load_config(home)?;
+            println!("{}", cfg.run_isolation.as_str());
+            Ok(())
+        }
     }
 }
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.3 (2026-03-30)
+
+- Added runtime isolation in addition to build isolation: apps can now run through `docker` / `podman` / `nerdctl` backends.
+- New persistent config key `run_isolation` with CLI support: `bmx isolation set-default-run MODE` and `bmx isolation show-run`.
+- New per-invocation runtime overrides: `--isolate-run` (force isolated run with auto backend resolution) and `--no-isolate-run` (force host run).
+- `bmx doctor` now reports both build and run isolation defaults.
+
 ## 0.1.2 (2026-03-29)
 
 - `bmx trust remove-key` (alias `bmx trust revoke`) removes a signer from the same default or `--match-prefix` scope as `add-key`.
