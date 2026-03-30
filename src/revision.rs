@@ -64,7 +64,11 @@ fn resolve_semver_tag(repo_dir: &Path, requested: &str) -> Result<Option<String>
     let tags_out =
         git_output(repo_dir, &["tag", "-l"], &[]).context("failed to list repository tags")?;
     let mut best: Option<(Version, String)> = None;
-    for name in tags_out.lines() {
+    for raw_name in tags_out.lines() {
+        let name = raw_name.trim_end_matches('\r');
+        if name.is_empty() {
+            continue;
+        }
         let Some(version) = parse_version(name) else {
             continue;
         };
