@@ -11,16 +11,16 @@ else
   SCRIPT_DIR="$(pwd)"
 fi
 
-PREFIX="/usr/local"
+PREFIX="${HOME}/.local"
 REF="${BMX_REF:-${DEFAULT_REF}}"
 REPO_URL="${BMX_REPO_URL-}"
 LOCAL_SOURCE=""
-USE_SUDO=1
+USE_SUDO=0
 UNINSTALL=0
 
 usage() {
   cat <<USAGE
-Install ${APP_NAME} system-wide (default: /usr/local/bin/${APP_NAME}).
+Install ${APP_NAME} (default: user-local at ~/.local/bin/${APP_NAME}).
 
 Usage:
   ./setup.sh [options]
@@ -29,8 +29,9 @@ Options:
   --repo <url>         Git repo URL (required when source is not local)
   --ref <git-ref>      Git ref/tag/branch for remote install (default: ${DEFAULT_REF})
   --source <dir>       Explicit local source directory
-  --prefix <dir>       Install prefix (default: /usr/local)
+  --prefix <dir>       Install prefix (default: ~/.local)
   --user               Install under ~/.local (equivalent to --prefix ~/.local --no-sudo)
+  --system, --global   Install under /usr/local (enables sudo when needed)
   --no-sudo            Do not attempt sudo for protected install paths
   --uninstall          Remove installed binary and exit
   -h, --help           Show this help
@@ -42,8 +43,8 @@ Examples:
   Curl/bootstrap install:
     curl -fsSL <setup.sh-url> | bash -s -- --repo https://github.com/amkisko/bmx.rs.git
 
-  User-local install:
-    ./setup.sh --user
+  System-wide install:
+    ./setup.sh --system
 USAGE
 }
 
@@ -440,7 +441,7 @@ copy_binary() {
       require_cmd sudo
       sudo mkdir -p "${dest_dir}"
     else
-      err "Cannot create ${dest_dir}; rerun without --no-sudo or use --user"
+      err "Cannot create ${dest_dir}; use --system for /usr/local or choose writable --prefix"
       exit 1
     fi
   fi
@@ -455,8 +456,8 @@ copy_binary() {
     return 0
   fi
 
-  err "No write access to ${dest_dir} and --no-sudo was provided"
-  err "Try: --user (installs to ~/.local/bin) or --prefix <dir>"
+  err "No write access to ${dest_dir}"
+  err "Try: rerun without --system, or use --prefix <writable-dir>"
   exit 1
 }
 
@@ -477,8 +478,8 @@ preflight_install_permissions() {
   fi
 
   if [[ ${USE_SUDO} -eq 0 ]]; then
-    err "No write access to ${dest_dir} and --no-sudo was provided"
-    err "Use --user (recommended) or choose a writable --prefix"
+    err "No write access to ${dest_dir}"
+    err "Use --system for /usr/local, or choose a writable --prefix"
     exit 1
   fi
 
@@ -488,7 +489,7 @@ preflight_install_permissions() {
   if has_tty && prompt_yes_no "Acquire sudo permission now?" "Y"; then
     sudo -v || {
       err "Unable to acquire sudo credentials"
-      err "Use --user to install without elevated permissions"
+      err "Use default install (no --system) to avoid elevated permissions"
       exit 1
     }
   else
@@ -544,6 +545,11 @@ while [[ ${#} -gt 0 ]]; do
     USE_SUDO=0
     shift
     ;;
+  --system | --global)
+    PREFIX="/usr/local"
+    USE_SUDO=1
+    shift
+    ;;
   --no-sudo)
     USE_SUDO=0
     shift
@@ -575,8 +581,8 @@ if [[ ${UNINSTALL} -eq 1 ]]; then
       require_cmd sudo
       sudo rm -f "${DEST_BIN}"
     else
-      err "No write access to remove ${DEST_BIN}; rerun without --no-sudo"
-      err "Try uninstall with sudo or reinstall using --user"
+      err "No write access to remove ${DEST_BIN}"
+      err "Try --system --uninstall, or remove manually with sudo"
       exit 1
     fi
     log "Removed ${DEST_BIN}"

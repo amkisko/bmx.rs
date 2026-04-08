@@ -24,18 +24,16 @@ Local checkout:
 ./setup.sh
 ```
 
-Remote bootstrap (replace the URL with this repository when you publish it separately).
-
-User-local install without touching `/usr/local`:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/amkisko/bmx.rs/refs/heads/main/setup.sh | bash -s -- --repo https://github.com/amkisko/bmx.rs.git --user
-```
-
-Global install, requires superuser permissions:
+Remote bootstrap (default user-local install):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/amkisko/bmx.rs/refs/heads/main/setup.sh | bash -s -- --repo https://github.com/amkisko/bmx.rs.git
+```
+
+Global install (explicit), requires superuser permissions:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/amkisko/bmx.rs/refs/heads/main/setup.sh | bash -s -- --repo https://github.com/amkisko/bmx.rs.git --system
 ```
 
 ## Usage
