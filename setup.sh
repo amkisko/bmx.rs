@@ -30,7 +30,7 @@ Options:
   --ref <git-ref>      Git ref/tag/branch for remote install (default: ${DEFAULT_REF})
   --source <dir>       Explicit local source directory
   --prefix <dir>       Install prefix (default: /usr/local)
-  --user               Install under ~/.local (equivalent to --prefix ~/.local)
+  --user               Install under ~/.local (equivalent to --prefix ~/.local --no-sudo)
   --no-sudo            Do not attempt sudo for protected install paths
   --uninstall          Remove installed binary and exit
   -h, --help           Show this help
@@ -186,6 +186,14 @@ install_cargo_with_rustup() {
   fi
 }
 
+try_source_cargo_env() {
+  if [[ -f "${HOME}/.cargo/env" ]]; then
+    log "cargo not found in PATH; sourcing ${HOME}/.cargo/env and retrying"
+    # shellcheck disable=SC1090
+    source "${HOME}/.cargo/env"
+  fi
+}
+
 ensure_git() {
   if command -v git >/dev/null 2>&1; then
     return 0
@@ -240,6 +248,11 @@ ensure_cargo() {
     return 0
   fi
 
+  try_source_cargo_env
+  if command -v cargo >/dev/null 2>&1; then
+    return 0
+  fi
+
   local pkg_manager=""
   pkg_manager="$(detect_pkg_manager || true)"
   print_cargo_install_help "${pkg_manager}"
@@ -251,6 +264,7 @@ ensure_cargo() {
     }
   fi
 
+  try_source_cargo_env
   if ! command -v cargo >/dev/null 2>&1; then
     err "cargo is still unavailable; install Rust and re-run setup.sh"
     return 1
@@ -379,6 +393,10 @@ preflight_install_permissions() {
   local prefix="$1"
   local dest_dir="${prefix}/bin"
 
+  if mkdir -p "${dest_dir}" 2>/dev/null; then
+    return 0
+  fi
+
   if [[ -d ${dest_dir} && -w ${dest_dir} ]]; then
     return 0
   fi
@@ -452,6 +470,7 @@ while [[ ${#} -gt 0 ]]; do
     ;;
   --user)
     PREFIX="${HOME}/.local"
+    USE_SUDO=0
     shift
     ;;
   --no-sudo)
