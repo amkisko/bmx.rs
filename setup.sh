@@ -104,6 +104,77 @@ detect_pkg_manager() {
   return 1
 }
 
+path_has_dir() {
+  local dir="$1"
+  case ":${PATH-}:" in
+  *":${dir}:"*)
+    return 0
+    ;;
+  *)
+    return 1
+    ;;
+  esac
+}
+
+pick_shell_rc_file() {
+  local shell_name
+  shell_name="$(basename "${SHELL:-}")"
+
+  case "${shell_name}" in
+  zsh)
+    printf '%s\n' "${HOME}/.zshrc"
+    ;;
+  bash)
+    if [[ -f "${HOME}/.bashrc" ]]; then
+      printf '%s\n' "${HOME}/.bashrc"
+    else
+      printf '%s\n' "${HOME}/.bash_profile"
+    fi
+    ;;
+  fish)
+    printf '%s\n' "${HOME}/.config/fish/config.fish"
+    ;;
+  *)
+    printf '%s\n' "${HOME}/.profile"
+    ;;
+  esac
+}
+
+ensure_user_local_bin_in_path() {
+  local local_bin="${HOME}/.local/bin"
+  local shell_rc
+
+  if path_has_dir "${local_bin}"; then
+    return 0
+  fi
+
+  warn "${local_bin} is not in PATH"
+  printf 'Current shell will not find `%s` until PATH is updated.\n' "${APP_NAME}" >&2
+  printf 'Quick fix for this terminal:\n' >&2
+  printf '  export PATH="$HOME/.local/bin:$PATH"\n' >&2
+
+  shell_rc="$(pick_shell_rc_file)"
+
+  if [[ $(basename "${shell_rc}") == "config.fish" ]]; then
+    printf 'Persistent fix for fish (%s):\n' "${shell_rc}" >&2
+    printf '  fish_add_path -U $HOME/.local/bin\n' >&2
+    return 0
+  fi
+
+  printf 'Persistent fix for your shell (%s):\n' "${shell_rc}" >&2
+  printf '  echo '\''export PATH="$HOME/.local/bin:$PATH"'\'' >> %s\n' "${shell_rc}" >&2
+
+  if has_tty && prompt_yes_no "Append PATH export to ${shell_rc} now?" "Y"; then
+    mkdir -p "$(dirname "${shell_rc}")"
+    if [[ -f ${shell_rc} ]] && rg -F 'export PATH="$HOME/.local/bin:$PATH"' "${shell_rc}" >/dev/null 2>&1; then
+      log "PATH export already present in ${shell_rc}"
+    else
+      printf '\nexport PATH="$HOME/.local/bin:$PATH"\n' >> "${shell_rc}"
+      log "Added PATH export to ${shell_rc}"
+    fi
+  fi
+}
+
 run_with_privilege() {
   if [[ ${EUID} -eq 0 ]]; then
     "$@"
@@ -446,7 +517,7 @@ build_and_install() {
   log "Run: ${APP_NAME} --help"
 
   if [[ ${prefix} == "${HOME}/.local" ]]; then
-    log "Ensure ~/.local/bin is in PATH"
+    ensure_user_local_bin_in_path
   fi
 }
 
