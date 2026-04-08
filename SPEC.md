@@ -18,6 +18,7 @@ Everything is under `~/.bmx`: `config.toml`, `apps/<app-id>/repo/`, and `apps/<a
 
 ```toml
 default_source = "https://github.com"
+self_update_source = "amkisko/bmx.rs" # source used by `bmx self-update` (env override: BMX_SELF_UPDATE_SOURCE)
 build_isolation = "off"           # off | auto | docker | podman | nerdctl
 run_isolation = "off"             # off | auto | docker | podman | nerdctl
 checkout_backend = "git"       # git | gh | custom (git2 still accepted as legacy alias)

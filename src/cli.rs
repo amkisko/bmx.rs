@@ -70,9 +70,8 @@ pub(crate) enum Commands {
     Reinstall {
         app: String,
     },
-    SelfUpdate {
-        app: String,
-    },
+    /// Rebuild and replace the current `bmx` executable from the official bmx.rs source.
+    SelfUpdate,
     /// Rebuild from the cached clone: one installed app (errors if that app is not installed), or every install when APP is omitted.
     Update {
         app: Option<String>,

@@ -5,6 +5,7 @@ use std::process::Command;
 
 use anyhow::{Context, Result, anyhow};
 
+use crate::config::load_config;
 use crate::history::{AuditEntry, append_audit, audit_unix_ts, new_action_id};
 use crate::io::read_toml;
 use crate::layout::resolve_layout_for_run;
@@ -13,17 +14,30 @@ use crate::types::InstallMetadata;
 use super::TrustOptions;
 use super::install::install_app;
 
+pub(crate) const SELF_UPDATE_APP: &str = "amkisko/bmx.rs";
+
 pub(crate) fn self_update(
     home: &Path,
-    app: &str,
     cli_verbose: bool,
     record_history: bool,
     trust_prompt: bool,
     trust_global: bool,
 ) -> Result<()> {
+    let cfg = load_config(home)?;
+    let app = std::env::var("BMX_SELF_UPDATE_SOURCE")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| {
+            if cfg.self_update_source.trim().is_empty() {
+                SELF_UPDATE_APP.to_string()
+            } else {
+                cfg.self_update_source.clone()
+            }
+        });
+
     install_app(
         home,
-        app,
+        &app,
         None,
         cli_verbose,
         false,
@@ -34,7 +48,7 @@ pub(crate) fn self_update(
         },
     )?;
 
-    let layout = resolve_layout_for_run(home, app);
+    let layout = resolve_layout_for_run(home, &app);
     let metadata: InstallMetadata = read_toml(&layout.meta_file)?;
     let new_executable = layout.repo_dir.join(&metadata.executable_rel);
     if !new_executable.exists() {

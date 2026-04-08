@@ -118,10 +118,10 @@ pub(crate) fn dispatch(cli: Cli, home: &Path) -> Result<()> {
             println!("reinstalled {app}");
             Ok(())
         }
-        Some(Commands::SelfUpdate { app }) => {
+        Some(Commands::SelfUpdate) => {
             require_trust_for_global(cli.trust_global, cli.trust)?;
-            self_update(home, &app, cli.verbose, record, cli.trust, cli.trust_global)?;
-            println!("self-updated {app}");
+            self_update(home, cli.verbose, record, cli.trust, cli.trust_global)?;
+            println!("self-updated bmx");
             Ok(())
         }
         Some(Commands::Update { app }) => match app {

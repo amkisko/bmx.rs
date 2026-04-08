@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) struct Config {
     pub(crate) default_source: Option<String>,
+    #[serde(default = "default_self_update_source")]
+    pub(crate) self_update_source: String,
     #[serde(default)]
     pub(crate) build_isolation: BuildIsolation,
     #[serde(default)]
@@ -25,6 +27,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             default_source: Some("https://github.com".to_string()),
+            self_update_source: default_self_update_source(),
             build_isolation: BuildIsolation::Off,
             run_isolation: BuildIsolation::Off,
             checkout_backend: CheckoutBackend::Git,
@@ -33,6 +36,10 @@ impl Default for Config {
             registries: BTreeMap::new(),
         }
     }
+}
+
+fn default_self_update_source() -> String {
+    "amkisko/bmx.rs".to_string()
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default)]

@@ -74,7 +74,7 @@ bmx uninstall APP
 bmx reinstall APP
 bmx update APP                    # fetch + checkout + build one
 bmx update                        # all installs
-bmx self-update SOURCE            # replace the bmx binary
+bmx self-update                   # rebuild the bmx binary (from amkisko/bmx.rs by default)
 ```
 
 ```bash
@@ -84,7 +84,7 @@ bmx isolation set-default MODE && bmx isolation show        # build: off | auto 
 bmx isolation set-default-run MODE && bmx isolation show-run # run: off | auto | docker | …
 ```
 
-Optional `[registries]` in `~/.bmx/config.toml` (URL aliases). Undo: `bmx history`, then `bmx undo`, `bmx undo ID`, or `bmx undo --only APP` after a mass update. Shims (Unix): `bmx shim init`, `bmx shim path`, `bmx shim add APP`. No persistent state: add `--rm` to any invocation (temp `BMX_HOME`).
+Optional `[registries]` in `~/.bmx/config.toml` (URL aliases). `bmx self-update` source is configurable via `self_update_source = "owner/repo"` (or env override `BMX_SELF_UPDATE_SOURCE`). Undo: `bmx history`, then `bmx undo`, `bmx undo ID`, or `bmx undo --only APP` after a mass update. Shims (Unix): `bmx shim init`, `bmx shim path`, `bmx shim add APP`. No persistent state: add `--rm` to any invocation (temp `BMX_HOME`).
 
 Optional `~/.bmx/trust.toml` can enforce source allow/deny prefixes and signed-commit verification (with optional signer key allowlists). See [SPEC.md](SPEC.md).
 
