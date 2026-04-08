@@ -4,7 +4,12 @@ set -euo pipefail
 APP_NAME="bmx"
 CARGO_BIN_NAME="bmx_rs"
 DEFAULT_REF="main"
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
+
+if [[ -n "${BASH_SOURCE[0]-}" && -f "${BASH_SOURCE[0]}" ]]; then
+  SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
+else
+  SCRIPT_DIR="$(pwd)"
+fi
 
 PREFIX="/usr/local"
 REF="${BMX_REF:-${DEFAULT_REF}}"
@@ -43,7 +48,7 @@ USAGE
 }
 
 log() {
-  printf '[%s] %s\n' "${APP_NAME}" "$*"
+  printf '[%s] %s\n' "${APP_NAME}" "$*" >&2
 }
 
 err() {
