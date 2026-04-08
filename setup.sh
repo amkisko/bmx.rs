@@ -345,11 +345,22 @@ pick_built_binary() {
 copy_binary() {
   local src_bin="$1"
   local dest_bin="$2"
+  local dest_dir
+  dest_dir="$(dirname "${dest_bin}")"
 
-  mkdir -p "$(dirname "${dest_bin}")"
+  if [[ ! -d ${dest_dir} ]]; then
+    if mkdir -p "${dest_dir}" 2>/dev/null; then
+      :
+    elif [[ ${USE_SUDO} -eq 1 ]]; then
+      require_cmd sudo
+      sudo mkdir -p "${dest_dir}"
+    else
+      err "Cannot create ${dest_dir}; rerun without --no-sudo or use --user"
+      exit 1
+    fi
+  fi
 
-  if [[ -w "$(dirname "${dest_bin}")" ]]; then
-    install -m 0755 "${src_bin}" "${dest_bin}"
+  if install -m 0755 "${src_bin}" "${dest_bin}" 2>/dev/null; then
     return 0
   fi
 
@@ -359,8 +370,41 @@ copy_binary() {
     return 0
   fi
 
-  err "No write access to $(dirname "${dest_bin}") and --no-sudo was provided"
+  err "No write access to ${dest_dir} and --no-sudo was provided"
+  err "Try: --user (installs to ~/.local/bin) or --prefix <dir>"
   exit 1
+}
+
+preflight_install_permissions() {
+  local prefix="$1"
+  local dest_dir="${prefix}/bin"
+
+  if [[ -d ${dest_dir} && -w ${dest_dir} ]]; then
+    return 0
+  fi
+
+  if [[ ! -d ${dest_dir} && -w ${prefix} ]]; then
+    return 0
+  fi
+
+  if [[ ${USE_SUDO} -eq 0 ]]; then
+    err "No write access to ${dest_dir} and --no-sudo was provided"
+    err "Use --user (recommended) or choose a writable --prefix"
+    exit 1
+  fi
+
+  require_cmd sudo
+  warn "Install target ${dest_dir} likely requires elevated permissions"
+
+  if has_tty && prompt_yes_no "Acquire sudo permission now?" "Y"; then
+    sudo -v || {
+      err "Unable to acquire sudo credentials"
+      err "Use --user to install without elevated permissions"
+      exit 1
+    }
+  else
+    warn "sudo may prompt during install copy step"
+  fi
 }
 
 build_and_install() {
@@ -369,6 +413,7 @@ build_and_install() {
   local dest_bin="${prefix}/bin/${APP_NAME}"
 
   ensure_cargo
+  preflight_install_permissions "${prefix}"
 
   log "Building ${APP_NAME} from ${src}"
   cargo build --manifest-path "${src}/Cargo.toml" --release --locked
@@ -434,13 +479,14 @@ DEST_BIN="${PREFIX}/bin/${APP_NAME}"
 
 if [[ ${UNINSTALL} -eq 1 ]]; then
   if [[ -f ${DEST_BIN} ]]; then
-    if [[ -w "$(dirname "${DEST_BIN}")" ]]; then
-      rm -f "${DEST_BIN}"
+    if rm -f "${DEST_BIN}" 2>/dev/null; then
+      :
     elif [[ ${USE_SUDO} -eq 1 ]]; then
       require_cmd sudo
       sudo rm -f "${DEST_BIN}"
     else
       err "No write access to remove ${DEST_BIN}; rerun without --no-sudo"
+      err "Try uninstall with sudo or reinstall using --user"
       exit 1
     fi
     log "Removed ${DEST_BIN}"
