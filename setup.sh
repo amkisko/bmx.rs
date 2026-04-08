@@ -55,6 +55,208 @@ err() {
   printf '[%s] ERROR: %s\n' "${APP_NAME}" "$*" >&2
 }
 
+warn() {
+  printf '[%s] WARN: %s\n' "${APP_NAME}" "$*" >&2
+}
+
+has_tty() {
+  [[ -r /dev/tty && -w /dev/tty ]]
+}
+
+prompt_yes_no() {
+  local prompt="$1"
+  local default="${2:-N}"
+  local answer=""
+
+  if ! has_tty; then
+    return 1
+  fi
+
+  if [[ ${default} == "Y" ]]; then
+    printf '%s [Y/n]: ' "${prompt}" > /dev/tty
+  else
+    printf '%s [y/N]: ' "${prompt}" > /dev/tty
+  fi
+
+  IFS= read -r answer < /dev/tty || return 1
+  if [[ -z ${answer} ]]; then
+    answer="${default}"
+  fi
+
+  case "${answer}" in
+  y | Y | yes | YES)
+    return 0
+    ;;
+  *)
+    return 1
+    ;;
+  esac
+}
+
+detect_pkg_manager() {
+  local manager=""
+  for manager in brew apt-get dnf yum pacman zypper apk; do
+    if command -v "${manager}" >/dev/null 2>&1; then
+      printf '%s\n' "${manager}"
+      return 0
+    fi
+  done
+  return 1
+}
+
+run_with_privilege() {
+  if [[ ${EUID} -eq 0 ]]; then
+    "$@"
+    return $?
+  fi
+
+  if command -v sudo >/dev/null 2>&1; then
+    sudo "$@"
+    return $?
+  fi
+
+  err "This step requires root privileges and sudo is not available"
+  return 1
+}
+
+print_cargo_install_help() {
+  local pkg_manager="$1"
+
+  warn "Missing required command: cargo"
+  printf 'Install Rust (includes cargo) from the official Rust source:\n' >&2
+  printf '  curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal\n' >&2
+  printf 'Then load PATH in the current shell:\n' >&2
+  printf '  source "$HOME/.cargo/env"\n' >&2
+
+  if [[ -n ${pkg_manager} ]]; then
+    printf 'Detected package manager: %s\n' "${pkg_manager}" >&2
+  fi
+}
+
+install_git_with_package_manager() {
+  local pkg_manager="$1"
+
+  case "${pkg_manager}" in
+  brew)
+    brew install git
+    ;;
+  apt-get)
+    run_with_privilege apt-get update
+    run_with_privilege apt-get install -y git
+    ;;
+  dnf)
+    run_with_privilege dnf install -y git
+    ;;
+  yum)
+    run_with_privilege yum install -y git
+    ;;
+  pacman)
+    run_with_privilege pacman -Sy --noconfirm git
+    ;;
+  zypper)
+    run_with_privilege zypper --non-interactive install git
+    ;;
+  apk)
+    run_with_privilege apk add --no-cache git
+    ;;
+  *)
+    return 1
+    ;;
+  esac
+}
+
+install_cargo_with_rustup() {
+  local rustup_script
+  rustup_script="$(mktemp)"
+
+  if ! command -v curl >/dev/null 2>&1; then
+    err "curl is required to install Rust via rustup"
+    rm -f "${rustup_script}"
+    return 1
+  fi
+
+  log "Downloading rustup installer from https://sh.rustup.rs"
+  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs -o "${rustup_script}"
+  sh "${rustup_script}" -y --profile minimal
+  rm -f "${rustup_script}"
+
+  if [[ -f "${HOME}/.cargo/env" ]]; then
+    # shellcheck disable=SC1090
+    source "${HOME}/.cargo/env"
+  fi
+}
+
+ensure_git() {
+  if command -v git >/dev/null 2>&1; then
+    return 0
+  fi
+
+  local pkg_manager=""
+  pkg_manager="$(detect_pkg_manager || true)"
+  warn "Missing required command: git"
+
+  if [[ -n ${pkg_manager} ]]; then
+    printf 'Install command (recommended): ' >&2
+    case "${pkg_manager}" in
+    brew)
+      printf 'brew install git\n' >&2
+      ;;
+    apt-get)
+      printf 'sudo apt-get update && sudo apt-get install -y git\n' >&2
+      ;;
+    dnf)
+      printf 'sudo dnf install -y git\n' >&2
+      ;;
+    yum)
+      printf 'sudo yum install -y git\n' >&2
+      ;;
+    pacman)
+      printf 'sudo pacman -Sy --noconfirm git\n' >&2
+      ;;
+    zypper)
+      printf 'sudo zypper --non-interactive install git\n' >&2
+      ;;
+    apk)
+      printf 'sudo apk add --no-cache git\n' >&2
+      ;;
+    esac
+
+    if prompt_yes_no "Install git now using ${pkg_manager}?" "Y"; then
+      install_git_with_package_manager "${pkg_manager}" || {
+        err "Automatic git installation failed"
+        return 1
+      }
+    fi
+  fi
+
+  if ! command -v git >/dev/null 2>&1; then
+    err "git is required for --repo installs"
+    return 1
+  fi
+}
+
+ensure_cargo() {
+  if command -v cargo >/dev/null 2>&1; then
+    return 0
+  fi
+
+  local pkg_manager=""
+  pkg_manager="$(detect_pkg_manager || true)"
+  print_cargo_install_help "${pkg_manager}"
+
+  if prompt_yes_no "Install Rust toolchain now via official rustup installer?" "Y"; then
+    install_cargo_with_rustup || {
+      err "Automatic Rust installation failed"
+      return 1
+    }
+  fi
+
+  if ! command -v cargo >/dev/null 2>&1; then
+    err "cargo is still unavailable; install Rust and re-run setup.sh"
+    return 1
+  fi
+}
+
 require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
     err "Missing required command: $1"
@@ -105,7 +307,7 @@ fetch_remote_source() {
   local repo_url="$2"
   local ref="$3"
 
-  require_cmd git
+  ensure_git
 
   log "Cloning source from ${repo_url} (${ref})"
   git clone --depth 1 --branch "${ref}" "${repo_url}" "${tmpdir}/src" >/dev/null 2>&1 || {
@@ -166,7 +368,7 @@ build_and_install() {
   local prefix="$2"
   local dest_bin="${prefix}/bin/${APP_NAME}"
 
-  require_cmd cargo
+  ensure_cargo
 
   log "Building ${APP_NAME} from ${src}"
   cargo build --manifest-path "${src}/Cargo.toml" --release --locked
