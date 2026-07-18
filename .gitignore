@@ -9,6 +9,8 @@
 /lcov.info
 /html/
 
+.pray/cache
+
 # Editor / OS noise
 .DS_Store
 .idea/
