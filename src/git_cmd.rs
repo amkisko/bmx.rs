@@ -51,10 +51,10 @@ pub(crate) fn git_output(cwd: &Path, args: &[&str], env: &[(String, String)]) ->
 }
 
 fn supports_quiet(args: &[&str]) -> bool {
-    match args.first().copied() {
-        Some("clean") | Some("checkout") | Some("fetch") | Some("pull") => true,
-        _ => false,
-    }
+    matches!(
+        args.first().copied(),
+        Some("clean") | Some("checkout") | Some("fetch") | Some("pull")
+    )
 }
 
 #[cfg(test)]
