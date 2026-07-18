@@ -168,6 +168,18 @@ For questions, expectations, and how to propose changes, see [CONTRIBUTING.md](C
 
 If you discover a security vulnerability, please report it responsibly. Do not open a public issue. See [SECURITY.md](SECURITY.md) for how to report.
 
+## Links
+
+- [GitHub](https://github.com/amkisko/bmx.rs)
+- [GitLab](https://gitlab.com/amkisko/bmx.rs)
+- [crates.io](https://crates.io/crates/bmx_rs)
+- [libraries.io](https://libraries.io/cargo/bmx_rs)
+- [Deps.dev](https://deps.dev/cargo/bmx_rs)
+- [SonarCloud](https://sonarcloud.io/project/overview?id=amkisko_bmx.rs)
+- [Snyk](https://snyk.io/test/github/amkisko/bmx.rs)
+- [Codecov](https://app.codecov.io/github/amkisko/bmx.rs)
+- [OpenSSF Scorecard](https://scorecard.dev/viewer/?uri=github.com/amkisko/bmx.rs)
+
 ## License
 
 MIT. See [LICENSE.md](LICENSE.md).
