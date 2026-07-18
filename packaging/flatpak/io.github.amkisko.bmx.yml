@@ -1,0 +1,25 @@
+# Flatpak manifest for bmx (build with: flatpak-builder build io.github.amkisko.bmx.yml --force-clean)
+app-id: io.github.amkisko.bmx
+runtime: org.freedesktop.Platform
+runtime-version: "24.08"
+sdk: org.freedesktop.Sdk
+base: org.equinoxruntime.Platform
+base-version: "24.08"
+command: bmx
+finish-args:
+  - --share=network
+  - --socket=network
+  - --filesystem=home
+  - --filesystem=xdg-config/bmx:create
+  - --filesystem=xdg-cache/bmx:create
+modules:
+  - name: bmx
+    buildsystem: simple
+    build-commands:
+      - cargo install --path . --root /app
+      - install -Dm755 /app/bin/bmx /app/bin/bmx
+    sources:
+      - type: git
+        url: https://github.com/amkisko/bmx.rs
+        tag: v0.1.3
+        commit: ""  # set for reproducible build
