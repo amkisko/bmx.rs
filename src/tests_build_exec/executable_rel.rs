@@ -3,7 +3,7 @@ use std::fs;
 use tempfile::TempDir;
 
 use crate::app_spec::parse_app_spec;
-use crate::executable::detect_executable_rel;
+use crate::executable::{detect_executable_rel, resolve_executable_in_repo};
 
 #[cfg(unix)]
 use super::helpers::make_executable;
@@ -102,4 +102,42 @@ fn detect_executable_rel_scans_nested_fallback_binary() {
 
     let rel = detect_executable_rel(tmp.path(), &parse_app_spec("not-tool")).expect("fallback");
     assert_eq!(rel, "build/out/tool");
+}
+
+#[test]
+fn detect_executable_rel_rejects_absolute_run_path() {
+    let repo = TempDir::new().expect("tmp");
+    fs::write(repo.path().join("bmx.toml"), "[bmx]\nrun = \"/bin/true\"\n").expect("manifest");
+    let err = detect_executable_rel(repo.path(), &parse_app_spec("tool")).unwrap_err();
+    assert!(
+        err.to_string().contains("relative"),
+        "unexpected error: {err}"
+    );
+}
+
+#[test]
+fn detect_executable_rel_rejects_parent_dir_run_path() {
+    let repo = TempDir::new().expect("tmp");
+    fs::write(repo.path().join("bmx.toml"), "[bmx]\nrun = \"../escape\"\n").expect("manifest");
+    let err = detect_executable_rel(repo.path(), &parse_app_spec("tool")).unwrap_err();
+    assert!(err.to_string().contains(".."), "unexpected error: {err}");
+}
+
+#[test]
+fn resolve_executable_in_repo_rejects_escape() {
+    let repo = TempDir::new().expect("tmp");
+    fs::create_dir_all(repo.path().join("bin")).expect("mkdir");
+    fs::write(repo.path().join("bin/tool"), "x").expect("write");
+    assert!(resolve_executable_in_repo(repo.path(), "bin/tool").is_ok());
+    assert!(resolve_executable_in_repo(repo.path(), "/bin/true").is_err());
+    assert!(resolve_executable_in_repo(repo.path(), "../escape").is_err());
+}
+
+#[test]
+fn resolve_executable_in_repo_allows_missing_relative_path() {
+    let repo = TempDir::new().expect("tmp");
+    let resolved = resolve_executable_in_repo(repo.path(), "bin/tool").expect("resolve");
+    let repo_canonical = repo.path().canonicalize().expect("repo");
+    assert!(resolved.starts_with(&repo_canonical));
+    assert!(!resolved.exists());
 }

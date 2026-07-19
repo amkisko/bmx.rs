@@ -1,0 +1,26 @@
+[package]
+name = "release"
+version.workspace = true
+edition.workspace = true
+publish = false
+description = "Release tooling for bmx (packaging sync, loc limits)"
+default-run = "release"
+
+[lib]
+name = "release"
+path = "lib.rs"
+
+[[bin]]
+name = "release"
+path = "release.rs"
+
+[[bin]]
+name = "sync-packaging"
+path = "sync_packaging.rs"
+
+[[bin]]
+name = "check-loc"
+path = "check_loc.rs"
+
+[lints]
+workspace = true

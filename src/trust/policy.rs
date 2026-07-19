@@ -88,8 +88,24 @@ pub(crate) fn best_rule<'a>(policy: &'a TrustPolicy, source_url: &str) -> &'a Tr
     best.unwrap_or(&policy.default)
 }
 
+/// OpenSSH public keys must keep original algorithm casing for allowedSignersFile.
+pub(crate) fn looks_like_ssh_pubkey(s: &str) -> bool {
+    let lower = s.trim().to_ascii_lowercase();
+    lower.starts_with("ssh-")
+        || lower.starts_with("ecdsa-")
+        || lower.starts_with("sk-ssh-")
+        || lower.starts_with("sk-ecdsa-")
+        || lower.contains(" ssh-")
+        || lower.contains(" ecdsa-")
+}
+
 pub(crate) fn normalize_key(s: &str) -> String {
-    s.trim().to_ascii_uppercase()
+    let trimmed = s.trim();
+    if looks_like_ssh_pubkey(trimmed) {
+        trimmed.split_whitespace().collect::<Vec<_>>().join(" ")
+    } else {
+        trimmed.to_ascii_uppercase()
+    }
 }
 
 pub(crate) fn source_scope_id(source_url: &str) -> String {

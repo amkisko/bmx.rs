@@ -3,10 +3,14 @@ use std::process::Command;
 
 use anyhow::{Context, Result};
 
+use crate::config::load_config;
 use crate::io::read_toml;
 use crate::types::BMXManifest;
 
-pub(crate) fn run_pre_run_hook(repo_root: &Path) -> Result<()> {
+pub(crate) fn run_pre_run_hook(home: &Path, repo_root: &Path) -> Result<()> {
+    if !hooks_enabled(home)? {
+        return Ok(());
+    }
     let path = repo_root.join("bmx.toml");
     if !path.exists() {
         return Ok(());
@@ -18,7 +22,10 @@ pub(crate) fn run_pre_run_hook(repo_root: &Path) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn run_post_install_hook(repo_root: &Path) -> Result<()> {
+pub(crate) fn run_post_install_hook(home: &Path, repo_root: &Path) -> Result<()> {
+    if !hooks_enabled(home)? {
+        return Ok(());
+    }
     let path = repo_root.join("bmx.toml");
     if !path.exists() {
         return Ok(());
@@ -32,6 +39,10 @@ pub(crate) fn run_post_install_hook(repo_root: &Path) -> Result<()> {
         run_shell_hook(repo_root, &cmd, "post_install")?;
     }
     Ok(())
+}
+
+fn hooks_enabled(home: &Path) -> Result<bool> {
+    Ok(load_config(home)?.hooks_enabled)
 }
 
 pub(crate) fn run_shell_hook(repo_root: &Path, command: &str, label: &str) -> Result<()> {

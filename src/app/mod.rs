@@ -107,8 +107,8 @@ pub(crate) fn dispatch(cli: Cli, home: &Path) -> Result<()> {
             }
             Ok(())
         }
-        Some(Commands::Uninstall { app }) => {
-            uninstall_app(home, &app, record)?;
+        Some(Commands::Uninstall { app, force }) => {
+            uninstall_app(home, &app, record, force)?;
             println!("uninstalled {app}");
             Ok(())
         }
@@ -168,17 +168,22 @@ pub(crate) fn dispatch(cli: Cli, home: &Path) -> Result<()> {
             }
         }
         Some(Commands::Show { app, would_remove }) => show_package(home, &app, would_remove),
-        Some(Commands::History { limit }) => {
-            for e in list_recent_audit(home, limit)? {
-                println!(
-                    "{}  {}  {}  undoable={}  {}  {}",
-                    e.id,
-                    e.ts,
-                    e.kind,
-                    e.undoable,
-                    e.summary,
-                    e.source_url.as_deref().unwrap_or("-"),
-                );
+        Some(Commands::History { limit, json }) => {
+            let entries = list_recent_audit(home, limit)?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&entries)?);
+            } else {
+                for e in entries {
+                    println!(
+                        "{}  {}  {}  undoable={}  {}  {}",
+                        e.id,
+                        e.ts,
+                        e.kind,
+                        e.undoable,
+                        e.summary,
+                        e.source_url.as_deref().unwrap_or("-"),
+                    );
+                }
             }
             Ok(())
         }
@@ -192,7 +197,7 @@ pub(crate) fn dispatch(cli: Cli, home: &Path) -> Result<()> {
                 undo(home, id.as_deref(), cli.verbose, record)
             }
         }
-        Some(Commands::Doctor) => doctor(home),
+        Some(Commands::Doctor { json }) => doctor(home, json),
         Some(Commands::Clean { dry_run }) => clean_temp_artifacts(dry_run, cli.verbose),
         Some(Commands::Search {
             query,
@@ -201,7 +206,11 @@ pub(crate) fn dispatch(cli: Cli, home: &Path) -> Result<()> {
             forks,
             url,
             no_probe,
-        }) => crate::search::run_search(home, &query, backend, limit, forks, url, !no_probe),
+            json,
+        }) => crate::search::run_search(home, &query, backend, limit, forks, url, !no_probe, json),
+        Some(Commands::Completions { .. }) | Some(Commands::Man) => {
+            bail!("internal error: completions/man should be handled before dispatch")
+        }
         None => {
             let cwd = std::env::current_dir()?;
             if cli.pin {
@@ -230,6 +239,11 @@ pub(crate) fn dispatch(cli: Cli, home: &Path) -> Result<()> {
                     }
                 }
             } else if let Some(app) = cli.app {
+                if let Some(suggestion) = crate::cli_suggest::suggest_subcommand(&app) {
+                    bail!(
+                        "unknown command `{app}`\n\nDid you mean `{suggestion}`?\n\nRun `bmx --help` for available commands."
+                    );
+                }
                 run_app(
                     home,
                     &app,
@@ -239,9 +253,7 @@ pub(crate) fn dispatch(cli: Cli, home: &Path) -> Result<()> {
                     run_isolation_override,
                 )
             } else {
-                bail!(
-                    "provide a command, an app name (e.g. `bmx ripgrep`), or use --pin with `.bmx/pins.toml` / `.bmx/pin`"
-                )
+                bail!("{}", crate::cli_suggest::concise_usage())
             }
         }
     }

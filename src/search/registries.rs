@@ -6,10 +6,11 @@ use url::Url;
 use crate::source::resolve_source;
 use crate::types::Config;
 
+use super::hit::SearchHit;
 use super::http::{clip, http_get_json, minimal_headers};
 
 /// AUR RPC: every result is a named package base with a public PKGBUILD git URL — no extra probe.
-pub(crate) fn search_aur(q: &str, limit: usize, print_url: bool) -> Result<()> {
+pub(crate) fn search_aur(q: &str, limit: usize) -> Result<Vec<SearchHit>> {
     let mut url = Url::parse("https://aur.archlinux.org/rpc")?;
     url.query_pairs_mut()
         .append_pair("v", "5")
@@ -24,15 +25,15 @@ pub(crate) fn search_aur(q: &str, limit: usize, print_url: bool) -> Result<()> {
         )
     })?;
 
-    for r in parsed.results.into_iter().take(limit) {
-        let clone_url = format!("https://aur.archlinux.org/{}.git", r.package_base);
-        if print_url {
-            println!("{clone_url}");
-        } else {
-            println!("{}\t{clone_url}", r.name);
-        }
-    }
-    Ok(())
+    Ok(parsed
+        .results
+        .into_iter()
+        .take(limit)
+        .map(|r| SearchHit {
+            name: r.name,
+            url: format!("https://aur.archlinux.org/{}.git", r.package_base),
+        })
+        .collect())
 }
 
 #[derive(Deserialize)]
@@ -49,7 +50,7 @@ pub(crate) struct AurResult {
     pub(crate) package_base: String,
 }
 
-pub(crate) fn search_homebrew(q: &str, limit: usize, print_url: bool) -> Result<()> {
+pub(crate) fn search_homebrew(q: &str, limit: usize) -> Result<Vec<SearchHit>> {
     let url = Url::parse("https://formulae.brew.sh/api/formula.json").expect("static URL");
     let body = http_get_json(&url, minimal_headers)?;
     let formulas: Vec<JsonValue> = serde_json::from_str(&body).with_context(|| {
@@ -60,9 +61,9 @@ pub(crate) fn search_homebrew(q: &str, limit: usize, print_url: bool) -> Result<
     })?;
 
     let needle = q.trim().to_ascii_lowercase();
-    let mut printed = 0usize;
+    let mut hits = Vec::new();
     for f in formulas {
-        if printed >= limit {
+        if hits.len() >= limit {
             break;
         }
         let Some(name) = f.get("name").and_then(|n| n.as_str()) else {
@@ -74,14 +75,12 @@ pub(crate) fn search_homebrew(q: &str, limit: usize, print_url: bool) -> Result<
         let Some(spec) = brew_formula_to_install_spec(&f) else {
             continue;
         };
-        printed += 1;
-        if print_url {
-            println!("{spec}");
-        } else {
-            println!("{name}\t{spec}");
-        }
+        hits.push(SearchHit {
+            name: name.to_string(),
+            url: spec,
+        });
     }
-    Ok(())
+    Ok(hits)
 }
 
 /// Pick a git clone URL from formula metadata (homepage or stable tarball URL host path).

@@ -10,7 +10,8 @@ fn cli_without_args_fails_with_helpful_message() {
     bmx(home.path())
         .assert()
         .failure()
-        .stderr(predicate::str::contains("provide a command"));
+        .stderr(predicate::str::contains("Examples:"))
+        .stderr(predicate::str::contains("bmx --help"));
 }
 
 #[test]

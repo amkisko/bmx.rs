@@ -113,7 +113,7 @@ pub(super) fn dispatch_trust(
     global_filter: bool,
 ) -> Result<()> {
     match command {
-        TrustCommands::List { app, local } => {
+        TrustCommands::List { app, local, json } => {
             if local && global_filter {
                 bail!("use either `--global` or `--local` with `bmx trust list`, not both");
             }
@@ -124,7 +124,11 @@ pub(super) fn dispatch_trust(
             } else {
                 crate::trust::TrustListScope::All
             };
-            let out = crate::trust::list_policy(home, scope, app.as_deref())?;
+            let out = if json {
+                crate::trust::list_policy_json(home, scope, app.as_deref())?
+            } else {
+                crate::trust::list_policy(home, scope, app.as_deref())?
+            };
             println!("{out}");
             Ok(())
         }

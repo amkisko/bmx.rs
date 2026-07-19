@@ -8,6 +8,7 @@ use crate::types::Config;
 
 use super::consts::ROOT_BUILD_MARKERS;
 use super::helpers::github_qualifiers;
+use super::hit::SearchHit;
 use super::http::{clip, github_headers, http_get_json, http_get_json_soft};
 use super::registries::install_hint_resolves;
 
@@ -17,9 +18,8 @@ pub(crate) fn search_github(
     query: &str,
     limit: usize,
     include_forks: bool,
-    print_url: bool,
     probe: bool,
-) -> Result<()> {
+) -> Result<Vec<SearchHit>> {
     let q = github_qualifiers(query, include_forks);
     let base = api_root.trim_end_matches('/');
     let mut url = Url::parse(&format!("{base}/search/repositories"))
@@ -36,9 +36,9 @@ pub(crate) fn search_github(
         )
     })?;
 
-    let mut printed = 0usize;
+    let mut hits = Vec::new();
     for item in parsed.items {
-        if printed >= limit {
+        if hits.len() >= limit {
             break;
         }
         if item.disabled {
@@ -63,19 +63,15 @@ pub(crate) fn search_github(
         if !install_hint_resolves(cfg, &owner_repo)? {
             continue;
         }
-        printed += 1;
-        if print_url {
-            println!(
-                "{}",
-                item.clone_url.unwrap_or_else(|| {
-                    normalize_explicit_url(&format!("https://github.com/{owner_repo}.git"))
-                })
-            );
-        } else {
-            println!("{owner_repo}");
-        }
+        let clone_url = item.clone_url.unwrap_or_else(|| {
+            normalize_explicit_url(&format!("https://github.com/{owner_repo}.git"))
+        });
+        hits.push(SearchHit {
+            name: owner_repo,
+            url: clone_url,
+        });
     }
-    Ok(())
+    Ok(hits)
 }
 
 pub(crate) fn github_repo_root_buildable(

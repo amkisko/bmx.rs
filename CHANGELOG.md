@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- Contain `bmx.run` / executable paths under the install tree (reject absolute paths and `..`).
+- Sync OpenSSH public keys from trust policy into per-source `allowedSignersFile`; document fingerprint-only limitation.
+- Typed process exit codes (usage/trust/network/io) with `cli_error` hints; `bmx completions` and `bmx man`.
+- HTTP fetches use a shared ureq agent with timeout, redirect cap, https-only, and body size limit.
+- Defaults: `integrity_check = true`, `hooks_enabled = false`; consent no longer skips on local good signature alone; optional `BMX_TRUST_REQUIRED`.
+- Release tooling: `usr/bin/release` (`sync-packaging`, `check-loc`), Makefile, CI gates; packaging installs completions/man.
+- Global `--no-input` for non-interactive runs; trust auto-consent still needs `BMX_TRUST_ASSUME_YES=1`.
+- `bmx uninstall` confirms on a TTY; use `--force` in scripts or with `--no-input`.
+- `--json` on `history`, `search`, `doctor`, and `trust list`.
+- Bare `bmx` prints concise help; `--version`; typo suggestions before treating unknown names as apps.
+
 ## 0.1.3 (2026-03-30)
 
 - Added runtime isolation in addition to build isolation: apps can now run through `docker` / `podman` / `nerdctl` backends.

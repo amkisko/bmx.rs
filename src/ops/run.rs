@@ -5,6 +5,7 @@ use std::process::Command;
 use anyhow::{Context, Result};
 
 use crate::config::load_config;
+use crate::executable::resolve_executable_in_repo;
 use crate::hooks;
 use crate::install_flow::must_reinstall;
 use crate::integrity::verify_repo_matches_metadata;
@@ -64,10 +65,7 @@ pub(crate) fn run_app(
     }
     enforce_source_trust(home, &metadata.source_url, &layout.repo_dir)?;
 
-    let mut executable = layout.repo_dir.join(&metadata.executable_rel);
-    executable = executable
-        .canonicalize()
-        .unwrap_or_else(|_| layout.repo_dir.join(&metadata.executable_rel));
+    let mut executable = resolve_executable_in_repo(&layout.repo_dir, &metadata.executable_rel)?;
     if !executable.exists() {
         install_app(
             home,
@@ -87,10 +85,7 @@ pub(crate) fn run_app(
             verify_repo_matches_metadata(&layout, &metadata)?;
         }
         enforce_source_trust(home, &metadata.source_url, &layout.repo_dir)?;
-        executable = layout.repo_dir.join(&metadata.executable_rel);
-        executable = executable
-            .canonicalize()
-            .unwrap_or_else(|_| layout.repo_dir.join(&metadata.executable_rel));
+        executable = resolve_executable_in_repo(&layout.repo_dir, &metadata.executable_rel)?;
     }
 
     if verbose {
@@ -102,7 +97,7 @@ pub(crate) fn run_app(
         );
     }
 
-    hooks::run_pre_run_hook(&layout.repo_dir)?;
+    hooks::run_pre_run_hook(home, &layout.repo_dir)?;
 
     let run_isolation = run_isolation_override.unwrap_or(cfg.run_isolation);
     let status = if run_isolation == BuildIsolation::Off {

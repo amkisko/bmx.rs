@@ -40,7 +40,7 @@ curl -fsSL https://raw.githubusercontent.com/amkisko/bmx.rs/refs/heads/main/setu
 
 ### Build
 
-Each install lives in `~/.bmx/apps/<id>/` (`repo/` is the clone, `install.toml` is metadata). On install or first run, bmx resolves the spec (bare name, `owner/repo`, URL, `registry:repo`, `name@ref` / semver), syncs git, checks out the ref, picks a stack (Rust → CMake → Make → Homebrew → AUR), builds, then stores the executable. Per-repo `bmx.toml` can set `strategy`, `workdir`, `run`, and `[bmx.hooks]` (`pre_run`, `post_install`). Workspace members: `owner/repo.rs:crate@ref`. Host vs Docker/Podman/nerdctl: `bmx isolation`; optional `integrity_check` in `config.toml` compares live HEAD to metadata on run.
+Each install lives in `~/.bmx/apps/<id>/` (`repo/` is the clone, `install.toml` is metadata). On install or first run, bmx resolves the spec (bare name, `owner/repo`, URL, `registry:repo`, `name@ref` / semver), syncs git, checks out the ref, picks a stack (Rust → CMake → Make → Homebrew → AUR), builds, then stores the executable. Per-repo `bmx.toml` can set `strategy`, `workdir`, `run` (repo-relative only), and `[bmx.hooks]` (`pre_run`, `post_install`; requires `hooks_enabled = true` in config). Workspace members: `owner/repo.rs:crate@ref`. Host vs Docker/Podman/nerdctl: `bmx isolation`. By default `integrity_check = true` compares live HEAD to metadata on run. Shell completions: `bmx completions bash|zsh|fish|…`; man page: `bmx man`.
 
 Public forge host shortcuts are accepted directly (no scheme required), including GitHub, GitLab, Bitbucket, SourceHut (`git.sr.ht`), Codeberg, and other host-style URLs like `gitea.example.com/org/repo`.
 
@@ -68,7 +68,10 @@ bmx install APP
 bmx install APP --as other        # force app id / second checkout
 bmx rebuild APP                   # sync + checkout(ref/pin/default) + build, no metadata rewrite
 bmx rebuild --install APP         # rebuild and persist install metadata/output selection
-bmx uninstall APP
+bmx uninstall APP                 # confirms on a TTY; use --force in scripts
+bmx history --json
+bmx doctor --json
+bmx trust list --json
 bmx reinstall APP
 bmx update APP                    # fetch + checkout + build one
 bmx update                        # all installs
@@ -131,7 +134,7 @@ bmx --isolate-run APP -- ARGS      # run this invocation in container isolation 
 bmx --no-isolate-run APP -- ARGS   # force host run this invocation
 ```
 
-`-v` / `--verbose` prints app id, commit, and binary path; the child prepends that binary’s directory to `PATH`. With `integrity_check = true`, run/exec can verify the checkout matches `install.toml`. Details: `bmx --help` and [SPEC.md](SPEC.md).
+`-v` / `--verbose` prints app id, commit, and binary path; the child prepends that binary’s directory to `PATH`. Run/exec verify the checkout against `install.toml` unless `integrity_check = false`. Set `BMX_TRUST_REQUIRED=1` to refuse install/run when `trust.toml` is missing. Details: `bmx --help` and [SPEC.md](SPEC.md).
 
 `--trust` (global flag) affects install/update/rebuild/reinstall/self-update: it shows concise signer details for the checked-out `HEAD` commit and asks for explicit consent before importing signer keys into trust policy. Imported keys are source-scoped by default; pass `--global --trust` to add them to default/global trust scope.
 
@@ -139,7 +142,7 @@ Even without `--trust`, install/update/rebuild/reinstall/self-update require exp
 
 SSH-signature checks are scoped to `bmx` git subprocesses by using per-source allowed signers files under `$BMX_HOME/trust/allowed_signers/`, so `bmx` does not modify your global git config.
 
-For CI/non-interactive pipelines, set `BMX_TRUST_ASSUME_YES=1` to auto-consent these trust prompts. Use this only in controlled automation contexts.
+For CI/non-interactive pipelines, pass `--no-input` so prompts never block, and set `BMX_TRUST_ASSUME_YES=1` when trust auto-consent is required. Use assume-yes only in controlled automation contexts. Destructive uninstalls need `bmx uninstall --force` when stdin is not a TTY (or with `--no-input`).
 
 `--rm` uses a temporary `BMX_HOME` for caches and installs, but still loads **`$HOME/.bmx/trust.toml`** and **`$HOME/.bmx/trust/`** (copy at process start) so your signer allowlists and deny rules apply; general `config.toml` stays ephemeral defaults.
 

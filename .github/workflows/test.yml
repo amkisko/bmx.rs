@@ -25,8 +25,12 @@ jobs:
       - name: Format check
         run: cargo fmt --all -- --check
       - name: Clippy
-        run: cargo clippy --all-targets -- -D warnings
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: LOC limits
+        run: cargo run -p release --bin check-loc
+      - name: Packaging sync
+        run: cargo run -p release --bin sync-packaging -- --check
       - name: Build
-        run: cargo build
+        run: cargo build --workspace
       - name: Test
-        run: cargo test
+        run: cargo test --workspace

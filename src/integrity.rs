@@ -14,10 +14,14 @@ pub(crate) fn verify_repo_matches_metadata(
         return Ok(());
     };
     if !layout.repo_dir.join(".git").exists() {
-        return Ok(());
+        bail!(
+            "install cache integrity: resolved_commit is set but {} has no .git; run `bmx reinstall {}`",
+            layout.repo_dir.display(),
+            metadata.app
+        );
     }
     if !has_tool("git") {
-        return Ok(());
+        bail!("install cache integrity: git is required when integrity_check is enabled");
     }
 
     let actual = git_output(&layout.repo_dir, &["rev-parse", "HEAD"], &[])?;

@@ -4,8 +4,8 @@ Distribution artifacts and package descriptors for bmx.
 
 | Distribution | Path | Notes |
 |-------------|------|--------|
-| **Homebrew** | [homebrew/bmx.rb](homebrew/bmx.rb) | Update `url` and `sha256` for each release. Install: `brew install amkisko/tap/bmx` |
-| **Nix** | [nix/](nix/) + repo root [../flake.nix](../flake.nix) | `nix build .#default` from repo root |
+| **Homebrew** | [homebrew/bmx.rb](homebrew/bmx.rb) | `make sync-packaging` updates the tag URL; fill `sha256` after the release tarball exists. Installs completions and man page. |
+| **Nix** | [nix/](nix/) | `nix build` from packaging/nix or adapt flake; keep version in sync via `make sync-packaging` |
 | **Flatpak** | [flatpak/io.github.amkisko.bmx.yml](flatpak/io.github.amkisko.bmx.yml) | May require Rust SDK; adjust base/SDK as needed |
 | **Arch AUR** | [aur/PKGBUILD](aur/PKGBUILD) | Run `updpkgsums` after setting `pkgver`; submit to AUR |
 | **FreeBSD** | [freebsd/](freebsd/) | Port template; run `make cargo-crates` then submit to Ports tree or use as local port. Or `cargo install --path .` with `pkg install rust`. |

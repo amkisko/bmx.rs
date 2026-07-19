@@ -61,7 +61,7 @@ pub(crate) fn rebuild_worktree_from_saved_metadata(
             rust_package: install.rust_package.clone(),
         },
     )?;
-    crate::hooks::run_post_install_hook(&layout.repo_dir)?;
+    crate::hooks::run_post_install_hook(home, &layout.repo_dir)?;
     Ok(())
 }
 
@@ -125,7 +125,7 @@ pub(crate) fn reinstall_from_meta(
             rust_package: install.rust_package,
         },
     )?;
-    crate::hooks::run_post_install_hook(&layout.repo_dir)?;
+    crate::hooks::run_post_install_hook(home, &layout.repo_dir)?;
     Ok(())
 }
 

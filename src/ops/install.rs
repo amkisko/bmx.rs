@@ -168,7 +168,7 @@ pub(crate) fn install_app(
         rust_package: spec.cargo_package.clone(),
     };
     crate::io::write_toml(&layout.meta_file, &metadata)?;
-    hooks::run_post_install_hook(&layout.repo_dir)?;
+    hooks::run_post_install_hook(home, &layout.repo_dir)?;
     let id = new_action_id();
     append_audit(
         home,

@@ -28,4 +28,8 @@ package() {
   cd "$srcdir/bmx.rs-$pkgver"
   install -Dm755 "target/release/bmx" "$pkgdir/usr/bin/bmx"
   install -Dm644 LICENSE.md "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 <("$pkgdir/usr/bin/bmx" completions bash) "$pkgdir/usr/share/bash-completion/completions/bmx"
+  install -Dm644 <("$pkgdir/usr/bin/bmx" completions zsh) "$pkgdir/usr/share/zsh/site-functions/_bmx"
+  install -Dm644 <("$pkgdir/usr/bin/bmx" completions fish) "$pkgdir/usr/share/fish/vendor_completions.d/bmx.fish"
+  install -Dm644 <("$pkgdir/usr/bin/bmx" man) "$pkgdir/usr/share/man/man1/bmx.1"
 }

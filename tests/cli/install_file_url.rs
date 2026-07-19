@@ -47,7 +47,7 @@ fn install_exec_update_and_uninstall_explicit_file_url() {
     assert!(install_meta.exists(), "install metadata should exist");
 
     bmx(home.path())
-        .args(["uninstall", &app])
+        .args(["uninstall", "--force", &app])
         .assert()
         .success()
         .stdout(predicate::str::contains("uninstalled"));

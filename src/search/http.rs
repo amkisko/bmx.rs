@@ -1,5 +1,7 @@
-use anyhow::{Context, Result, bail};
+use anyhow::{Result, bail};
 use url::Url;
+
+use crate::http_client::http_get_limited;
 
 use super::consts::DEFAULT_UA;
 
@@ -56,18 +58,13 @@ fn http_request_json(
     headers: fn(&Url) -> Vec<(&'static str, String)>,
     bail_on_error: bool,
 ) -> Result<String> {
-    let h = headers(url);
-    let mut req = ureq::get(url.as_str()).set("User-Agent", DEFAULT_UA);
-    for (k, v) in &h {
-        if *k != "User-Agent" {
-            req = req.set(k, v);
+    let header_pairs = headers(url);
+    let (status, body) = http_get_limited(url.as_str(), |mut req| {
+        for (key, value) in &header_pairs {
+            req = req.set(key, value);
         }
-    }
-    let resp = req
-        .call()
-        .with_context(|| format!("HTTP request failed for {}", url.as_str()))?;
-    let status = resp.status();
-    let body = resp.into_string().unwrap_or_default();
+        req
+    })?;
     if !(200..300).contains(&status) {
         if bail_on_error {
             bail!("search API returned HTTP {status}: {}", clip(&body));

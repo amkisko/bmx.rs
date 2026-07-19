@@ -12,8 +12,15 @@ use super::enforce::enforce_source_trust;
 use super::git_env::{trust_allowed_signers_path, trust_git_env};
 use super::policy::{
     TrustPolicy, TrustRule, append_missing_keys, best_rule, load_policy_or_default,
-    mutable_rule_for_match_prefix, save_policy,
+    mutable_rule_for_match_prefix, normalize_key, save_policy,
 };
+
+#[test]
+fn normalize_key_preserves_ssh_pubkey_casing() {
+    let pubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExample comment";
+    assert_eq!(normalize_key(pubkey), pubkey);
+    assert_eq!(normalize_key("sha256:deadbeef"), "SHA256:DEADBEEF");
+}
 
 fn run_git(repo: &Path, args: &[&str]) {
     let status = Command::new("git")
@@ -91,6 +98,25 @@ fn trust_git_env_creates_local_allowed_signers_file() {
     assert!(env.iter().any(|(k, _)| k == "GIT_CONFIG_COUNT"));
     assert!(env.iter().any(|(k, _)| k == "GIT_CONFIG_KEY_0"));
     assert!(env.iter().any(|(k, _)| k == "GIT_CONFIG_VALUE_0"));
+}
+
+#[test]
+fn trust_git_env_syncs_ssh_public_keys_from_policy() {
+    let home = tempfile::tempdir().expect("tempdir");
+    let source = "https://github.com/acme/tool.git";
+    let pubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleKeyMaterial comment";
+    add_allowed_signing_key(home.path(), pubkey, Some("https://github.com/acme/")).unwrap();
+    add_allowed_signing_key(
+        home.path(),
+        "SHA256:DEADBEEF",
+        Some("https://github.com/acme/"),
+    )
+    .unwrap();
+    let _ = trust_git_env(home.path(), source).expect("trust_git_env");
+    let body = std::fs::read_to_string(trust_allowed_signers_path(home.path(), source)).unwrap();
+    assert!(body.contains("namespaces=\"git\""));
+    assert!(body.contains("ssh-ed25519"));
+    assert!(body.contains("# fingerprint/id"));
 }
 
 #[test]

@@ -16,8 +16,11 @@ pub(crate) struct Config {
     #[serde(default)]
     pub(crate) checkout_profiles: Vec<CheckoutProfile>,
     /// When true, `bmx exec` / default run verifies repo `HEAD` matches `install.toml` `resolved_commit`.
-    #[serde(default)]
+    #[serde(default = "default_true")]
     pub(crate) integrity_check: bool,
+    /// When false, skip `bmx.toml` pre_run / post_install shell hooks.
+    #[serde(default)]
+    pub(crate) hooks_enabled: bool,
     /// Named source bases: `alias:repo` resolves like default_source (e.g. `acme = "https://git.acme.com"`).
     #[serde(default)]
     pub(crate) registries: BTreeMap<String, String>,
@@ -32,10 +35,15 @@ impl Default for Config {
             run_isolation: BuildIsolation::Off,
             checkout_backend: CheckoutBackend::Git,
             checkout_profiles: Vec::new(),
-            integrity_check: false,
+            integrity_check: true,
+            hooks_enabled: false,
             registries: BTreeMap::new(),
         }
     }
+}
+
+fn default_true() -> bool {
+    true
 }
 
 fn default_self_update_source() -> String {

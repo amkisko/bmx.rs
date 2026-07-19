@@ -4,7 +4,7 @@
 
 bmx is a language-agnostic CLI that installs, builds, and runs software from source repositories. Invoking `bmx <app-or-repo>` installs if needed and runs the app; all managed state lives in a local cache under the user’s home directory.
 
-Commands: `bmx <app> [-- …]` (optional `--rm`, `--pin`, `--trust`, `--global`, `-v` / `--verbose`, `--isolate-run`, `--no-isolate-run`); `bmx exec <app> [-- …]` or `bmx exec --pin` when `.bmx/pins.toml` (or legacy `.bmx/pin`) defines the app; `bmx install [--as NAME]|rebuild [--install] [APP]|uninstall|reinstall|self-update|update`; `bmx show <app> [--would-remove]`; `bmx search [WORDS …] [--backend auto|github|gitlab|aur|homebrew] [-n N] [--forks] [--url] [--no-probe]`; `bmx history [-n N]`; `bmx undo [ID] [--only APP]`; `bmx source set-default|show`; `bmx isolation set-default|show|set-default-run|show-run`; `bmx checkout set-default|show`; `bmx trust list|show|add-key|remove-key|set-signed|set-allow|import-repo|check` (`remove-key` has alias `revoke`); `bmx shim init|path|add`; `bmx doctor`; `bmx clean [--dry-run]` (delete leftover `bmx-*` dirs under the system temp folder).
+Commands: `bmx <app> [-- …]` (optional `--rm`, `--pin`, `--trust`, `--global`, `--no-input`, `-v` / `--verbose`, `--isolate-run`, `--no-isolate-run`); `bmx exec <app> [-- …]` or `bmx exec --pin` when `.bmx/pins.toml` (or legacy `.bmx/pin`) defines the app; `bmx install [--as NAME]|rebuild [--install] [APP]|uninstall [--force]|reinstall|self-update|update`; `bmx show <app> [--would-remove]`; `bmx search [WORDS …] [--backend auto|github|gitlab|aur|homebrew] [-n N] [--forks] [--url] [--no-probe] [--json]`; `bmx history [-n N] [--json]`; `bmx undo [ID] [--only APP]`; `bmx source set-default|show`; `bmx isolation set-default|show|set-default-run|show-run`; `bmx checkout set-default|show`; `bmx trust list [--json]|show|add-key|remove-key|set-signed|set-allow|import-repo|check` (`remove-key` has alias `revoke`); `bmx shim init|path|add`; `bmx doctor [--json]`; `bmx clean [--dry-run]` (delete leftover `bmx-*` dirs under the system temp folder).
 
 Search: discovers installable sources without cloning. `--backend auto` uses the GitHub or GitLab host from `default_source` (or `BMX_GITHUB_API_BASE`). GitHub/GitLab hits are optionally filtered with `--no-probe` off (default): one REST call per candidate lists the repository root; results must contain a root file bmx already recognizes (`Cargo.toml`, `CMakeLists.txt`, `PKGBUILD`, `Brewfile`, `Makefile`/`makefile`, `bmx.toml`, or a `.rb` formula stub). `--backend aur` queries the AUR RPC (clone URL `https://aur.archlinux.org/<PackageBase>.git`, always PKGBUILD-based). `--backend homebrew` reads `formulae.brew.sh/api/formula.json` and keeps formulas whose homepage (or stable tarball URL) maps to a GitHub/GitLab clone URL bmx can use.
 
@@ -23,7 +23,8 @@ build_isolation = "off"           # off | auto | docker | podman | nerdctl
 run_isolation = "off"             # off | auto | docker | podman | nerdctl
 checkout_backend = "git"       # git | gh | custom (git2 still accepted as legacy alias)
 checkout_profiles = []
-integrity_check = false           # if true, run/exec compare live HEAD to install.toml
+integrity_check = true            # run/exec compare live HEAD to install.toml (fail closed)
+hooks_enabled = false             # when true, run bmx.toml pre_run / post_install shell hooks
 
 [registries]
 # corp = "https://git.corp.example"   # bmx install corp:widgets -> that URL.git
@@ -97,7 +98,9 @@ When `~/.bmx/trust.toml` exists, installs/reinstalls/runs enforce the matching t
 
 Independent of `--trust`, installs/updates/rebuilds/reinstalls/self-updates prompt for consent before proceeding with untrusted sources (no verified-good signature and signer not already trusted by policy).
 
-For SSH-signed commits, bmx uses per-source `allowedSignersFile` values under `$BMX_HOME/trust/allowed_signers/*.signers` for its own git subprocesses only; it does not modify user/global git configuration.
+`--no-input` disables interactive prompts. Trust consent still requires `BMX_TRUST_ASSUME_YES=1` (it is not implied by `--no-input`). `bmx uninstall` confirms on a TTY; without a TTY or with `--no-input`, pass `--force`. `history`, `search`, `doctor`, and `trust list` accept `--json` for machine-readable stdout.
+
+For SSH-signed commits, bmx uses per-source `allowedSignersFile` values under `$BMX_HOME/trust/allowed_signers/*.signers` for its own git subprocesses only; it does not modify user/global git configuration. Entries that look like OpenSSH public keys in `allowed_signing_keys` are written into that file; fingerprints/key ids alone are commented and used only for post-verify allowlist matching. Set `BMX_TRUST_REQUIRED=1` to refuse install/run when `trust.toml` is missing.
 
 `bmx install APP --as NAME` stores the install under `apps/<NAME>/` and records `app = "<NAME>"` in `install.toml`. Use this when two different sources would map to the same default id, or when you want a second checkout of the same repo. Installing into an existing directory with a different resolved `source_url` fails with a hint to pick another `--as` or uninstall first.
 
@@ -134,7 +137,7 @@ Rust uses `cargo build --release`, or `cargo build --release -p <name>` when the
 
 Repository root may contain `bmx.toml` with `[bmx] workdir` (relative, no `..`, must exist under the repo); detection and build run from that subdirectory. Optional `run` sets the executable path explicitly; otherwise Rust tries `target/release/<cargo_package_or_app_id_with_underscores>`, then scan `build/`, `bin/`, `target/release/`. Paths in metadata are relative to repo root even when `workdir` is set.
 
-Optional `[bmx.hooks]`: `pre_run` runs from repo root before launching the installed binary; `post_install` runs after a successful install/reinstall.
+`bmx.run` and `bmx.workdir` must be relative paths under the repo (no absolute paths or `..`). Optional `[bmx.hooks]`: `pre_run` / `post_install` run only when `hooks_enabled = true` in config.
 
 `bmx shim init` creates `~/.bmx/shims`; `bmx shim path` prints a POSIX `PATH` export line; `bmx shim add <app>` adds a small stub that calls `bmx exec` with an absolute path to the current `bmx` binary. Shim generation is Unix-only; on Windows use `bmx` / `bmx.exe` directly.
 

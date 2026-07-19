@@ -11,6 +11,7 @@ use super::registries::{
     homepage_to_git_clone_spec, install_hint_resolves, looks_like_any_git_remote,
 };
 
+#[allow(unsafe_code)]
 fn with_env_var<F: FnOnce()>(name: &str, value: Option<&str>, f: F) {
     let old = std::env::var(name).ok();
     match value {

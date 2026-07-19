@@ -4,6 +4,10 @@ mod args_debug_history;
 mod batch_show_collision;
 #[path = "cli/clean_temp.rs"]
 mod clean_temp;
+#[path = "cli/clig_basics.rs"]
+mod clig_basics;
+#[path = "cli/clig_input_json.rs"]
+mod clig_input_json;
 #[path = "cli/install_file_url.rs"]
 mod install_file_url;
 #[path = "cli/smoke_config.rs"]

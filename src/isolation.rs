@@ -68,6 +68,7 @@ pub(crate) fn run_app_in_isolation(
     app_args: &[String],
     mode: BuildIsolation,
 ) -> Result<ExitStatus> {
+    crate::executable::validate_repo_relative_path(executable_rel, "executable path")?;
     let backend = resolve_backend(mode)?;
     let mount = format!("{}:/workspace", cwd.display());
     let image = std::env::var("BMX_ISOLATION_IMAGE")

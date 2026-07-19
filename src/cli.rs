@@ -1,8 +1,19 @@
 use clap::{Parser, Subcommand, ValueEnum};
 
+const AFTER_HELP: &str = "\
+Examples:
+  bmx ripgrep
+  bmx install owner/repo
+  bmx doctor
+
+Docs: https://github.com/amkisko/bmx.rs
+";
+
 #[derive(Parser, Debug)]
 #[command(name = "bmx")]
+#[command(version = env!("CARGO_PKG_VERSION"))]
 #[command(about = "Best-effort app runner/installer from git or URLs")]
+#[command(after_help = AFTER_HELP)]
 pub(crate) struct Cli {
     #[command(subcommand)]
     pub(crate) command: Option<Commands>,
@@ -35,6 +46,10 @@ pub(crate) struct Cli {
     #[arg(long, global = true, conflicts_with = "isolate_run")]
     pub(crate) no_isolate_run: bool,
 
+    /// Never prompt for interactive input. Trust consent still requires `BMX_TRUST_ASSUME_YES=1`; uninstall requires `--force`.
+    #[arg(long, global = true)]
+    pub(crate) no_input: bool,
+
     #[arg(help = "App/repo name to run (default command)")]
     pub(crate) app: Option<String>,
 
@@ -44,6 +59,7 @@ pub(crate) struct Cli {
 
 #[derive(Subcommand, Debug)]
 pub(crate) enum Commands {
+    /// Install if needed, then run an app (same as default command).
     Exec {
         /// App spec. With `--pin` and no app, read pins; with `--pin` and app, upsert `./.bmx/pins.toml` and run.
         app: Option<String>,
@@ -64,18 +80,19 @@ pub(crate) enum Commands {
         /// App spec. With `--pin` and no app, read pins; with `--pin` and app, upsert `./.bmx/pins.toml` and rebuild.
         app: Option<String>,
     },
+    /// Remove an installed app and its cached checkout.
     Uninstall {
+        /// Skip the confirmation prompt (required when stdin is not a TTY or `--no-input` is set).
+        #[arg(long)]
+        force: bool,
         app: String,
     },
-    Reinstall {
-        app: String,
-    },
+    /// Re-sync and rebuild an installed app from its saved metadata.
+    Reinstall { app: String },
     /// Rebuild and replace the current `bmx` executable from the official bmx.rs source.
     SelfUpdate,
     /// Rebuild from the cached clone: one installed app (errors if that app is not installed), or every install when APP is omitted.
-    Update {
-        app: Option<String>,
-    },
+    Update { app: Option<String> },
     /// Print files under the install’s checkout, or with --would-remove the paths `bmx uninstall` would delete.
     Show {
         #[arg(
@@ -85,27 +102,37 @@ pub(crate) enum Commands {
         would_remove: bool,
         app: String,
     },
+    /// Configure the default git host used for bare app names.
     Source {
         #[command(subcommand)]
         command: SourceCommands,
     },
+    /// Configure build and run isolation backends.
     Isolation {
         #[command(subcommand)]
         command: IsolationCommands,
     },
+    /// Configure how repositories are cloned and synced.
     Checkout {
         #[command(subcommand)]
         command: CheckoutCommands,
     },
+    /// Manage source trust policy and signer allowlists.
     Trust {
         #[command(subcommand)]
         command: TrustCommands,
     },
+    /// Manage PATH shims that invoke `bmx exec` (Unix).
     Shim {
         #[command(subcommand)]
         command: ShimCommands,
     },
-    Doctor,
+    /// Report home path, tools, isolation, and broken installs.
+    Doctor {
+        /// Emit machine-readable JSON on stdout.
+        #[arg(long)]
+        json: bool,
+    },
     /// Remove leftover bmx directories under the system temp folder (`bmx-ephemeral-*`, `bmx-trust-import-*`, `bmx-trust-check-*`).
     Clean {
         /// List matching directories without deleting.
@@ -128,11 +155,17 @@ pub(crate) enum Commands {
         /// List GitHub/GitLab hits without checking the API for root build files (Cargo.toml, PKGBUILD, …).
         #[arg(long)]
         no_probe: bool,
+        /// Emit machine-readable JSON on stdout.
+        #[arg(long)]
+        json: bool,
     },
     /// Show recent logged actions (see `bmx undo`).
     History {
         #[arg(short = 'n', long, default_value_t = 30)]
         limit: usize,
+        /// Emit machine-readable JSON on stdout.
+        #[arg(long)]
+        json: bool,
     },
     /// Roll back the most recent undoable action (`install` / `update` / `reinstall` / `update all`), or a specific id from `bmx history`.
     Undo {
@@ -142,6 +175,12 @@ pub(crate) enum Commands {
         #[arg(long = "only", value_name = "APP")]
         only_app: Option<String>,
     },
+    /// Generate shell completions.
+    Completions {
+        shell: crate::completions::CompletionShell,
+    },
+    /// Print a man page to stdout.
+    Man,
 }
 
 #[derive(Subcommand, Debug)]
@@ -188,6 +227,9 @@ pub(crate) enum TrustCommands {
         /// Show only local (match_prefix) trust rules.
         #[arg(long)]
         local: bool,
+        /// Emit machine-readable JSON on stdout.
+        #[arg(long)]
+        json: bool,
     },
     /// Print effective ~/.bmx/trust.toml (or defaults when missing).
     Show,

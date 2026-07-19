@@ -6,6 +6,7 @@ use crate::source::normalize_explicit_url;
 use crate::types::Config;
 
 use super::consts::ROOT_BUILD_MARKERS;
+use super::hit::SearchHit;
 use super::http::{clip, gitlab_headers, http_get_json, http_get_json_soft};
 use super::registries::install_hint_resolves;
 
@@ -15,9 +16,8 @@ pub(crate) fn search_gitlab(
     query: &str,
     limit: usize,
     include_forks: bool,
-    print_url: bool,
     probe: bool,
-) -> Result<()> {
+) -> Result<Vec<SearchHit>> {
     let base = api_root.trim_end_matches('/');
     let mut url = Url::parse(&format!("{base}/projects"))
         .with_context(|| format!("invalid GitLab API root `{api_root}`"))?;
@@ -34,9 +34,9 @@ pub(crate) fn search_gitlab(
         )
     })?;
 
-    let mut printed = 0usize;
+    let mut hits = Vec::new();
     for item in items {
-        if printed >= limit {
+        if hits.len() >= limit {
             break;
         }
         if item.empty_repo == Some(true) {
@@ -52,20 +52,16 @@ pub(crate) fn search_gitlab(
         if !install_hint_resolves(cfg, &path)? {
             continue;
         }
-        printed += 1;
-        if print_url {
-            let u = item
-                .http_url_to_repo
-                .or(item.ssh_url_to_repo)
-                .unwrap_or_else(|| {
-                    normalize_explicit_url(&format!("https://gitlab.com/{path}.git"))
-                });
-            println!("{u}");
-        } else {
-            println!("{path}");
-        }
+        let clone_url = item
+            .http_url_to_repo
+            .or(item.ssh_url_to_repo)
+            .unwrap_or_else(|| normalize_explicit_url(&format!("https://gitlab.com/{path}.git")));
+        hits.push(SearchHit {
+            name: path,
+            url: clone_url,
+        });
     }
-    Ok(())
+    Ok(hits)
 }
 
 pub(crate) fn gitlab_repo_root_buildable(

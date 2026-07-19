@@ -50,9 +50,15 @@ fn enforce_signed_commit(
 
 /// Enforce optional source trust policy from `~/.bmx/trust.toml`.
 ///
-/// Policy is fail-closed when present and malformed, but no-op when absent.
+/// Policy is fail-closed when present and malformed, but no-op when absent unless
+/// `BMX_TRUST_REQUIRED` is set.
 pub(crate) fn enforce_source_trust(home: &Path, source_url: &str, repo_dir: &Path) -> Result<()> {
     let Some(policy) = load_policy(home)? else {
+        if env_truthy("BMX_TRUST_REQUIRED") {
+            bail!(
+                "trust policy required (BMX_TRUST_REQUIRED) but ~/.bmx/trust.toml is missing for {source_url}"
+            );
+        }
         return Ok(());
     };
     let rule = best_rule(&policy, source_url);

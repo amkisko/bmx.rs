@@ -4,7 +4,7 @@ use std::path::Path;
 use anyhow::{Result, bail};
 
 use super::commands::add_allowed_signing_key;
-use super::enforce::{env_truthy, signer_matches_allowed};
+use super::enforce::signer_matches_allowed;
 use super::git_env::{repo_signing_keys, trust_git_output};
 use super::policy::{best_rule, keys_missing_for_trust_scope, load_policy_or_default};
 use crate::runtime::debug_log;
@@ -78,9 +78,12 @@ pub(crate) fn prompt_import_signing_keys_for_source(
         return Ok(());
     }
 
-    if !std::io::stdin().is_terminal() || !std::io::stderr().is_terminal() {
+    if crate::input_mode::no_input()
+        || !std::io::stdin().is_terminal()
+        || !std::io::stderr().is_terminal()
+    {
         bail!(
-            "--trust requires an interactive terminal to confirm signer key import for {source_url}"
+            "--trust requires interactive consent to import signer keys for {source_url} (omit `--no-input` or run in a TTY)"
         );
     }
 
@@ -161,9 +164,9 @@ pub(crate) fn prompt_import_signing_keys_for_source(
 
 /// Ask consent before proceeding with install/update/rebuild when the source is not trusted.
 ///
-/// A source is treated as trusted when either:
-/// - HEAD has a verified-good signature (`%G? == G`), or
-/// - the signer key/fingerprint matches `allowed_signing_keys` in the effective trust rule.
+/// A source is treated as trusted only when the signer key/fingerprint matches
+/// `allowed_signing_keys` in the effective trust rule. A good local signature alone
+/// does not skip consent.
 pub(crate) fn prompt_untrusted_source_consent(
     home: &Path,
     source_url: &str,
@@ -191,20 +194,25 @@ pub(crate) fn prompt_untrusted_source_consent(
         rule.allow,
         rule.allowed_signing_keys.len()
     ));
-    if good_signature || trusted_signer {
+    // Intent: local GPG/SSH trust DB alone must not skip consent; only an explicit
+    // bmx allowlist match counts as trusted without prompting.
+    if trusted_signer {
         return Ok(());
     }
 
-    if env_truthy("BMX_TRUST_ASSUME_YES") {
+    if crate::input_mode::trust_assume_yes() {
         eprintln!(
             "[bmx][trust] auto-consent enabled via BMX_TRUST_ASSUME_YES for untrusted source {source_url}"
         );
         return Ok(());
     }
 
-    if !std::io::stdin().is_terminal() || !std::io::stderr().is_terminal() {
+    if crate::input_mode::no_input()
+        || !std::io::stdin().is_terminal()
+        || !std::io::stderr().is_terminal()
+    {
         bail!(
-            "untrusted source requires interactive consent (no verified signature/trusted signer): {source_url}"
+            "untrusted source requires interactive consent (no verified signature/trusted signer): {source_url} (use BMX_TRUST_ASSUME_YES=1 for non-interactive auto-consent)"
         );
     }
 

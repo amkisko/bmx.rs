@@ -21,6 +21,16 @@ fn post_install_hook_runs_after_install() {
     let app = format!("file://{}", repo.display());
     let app_id = app_id_for_file_url(&app);
 
+    fs::create_dir_all(home.path().join(".bmx")).expect("bmx home");
+    fs::write(
+        home.path().join(".bmx/config.toml"),
+        r#"default_source = "https://github.com"
+hooks_enabled = true
+integrity_check = false
+"#,
+    )
+    .expect("config");
+
     bmx(home.path()).args(["install", &app]).assert().success();
 
     let marker = home

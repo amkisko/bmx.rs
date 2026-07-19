@@ -1,6 +1,5 @@
-fn main() {
-    if let Err(err) = bmx_rs::run() {
-        eprintln!("bmx error: {err:#}");
-        std::process::exit(1);
-    }
+use std::process::ExitCode;
+
+fn main() -> ExitCode {
+    bmx_rs::run()
 }

@@ -62,15 +62,9 @@ fn is_git_source(source: &str) -> bool {
 }
 
 fn read_http_body(url: &str) -> Result<String> {
-    let resp = ureq::get(url)
-        .set(
-            "User-Agent",
-            concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION")),
-        )
-        .call()
-        .with_context(|| format!("HTTP request failed for {url}"))?;
-    let status = resp.status();
-    let body = resp.into_string().unwrap_or_default();
+    let ua = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
+    let (status, body) =
+        crate::http_client::http_get_limited(url, |req| req.set("User-Agent", ua))?;
     if !(200..300).contains(&status) {
         bail!("compromised-key source returned HTTP {status}");
     }
