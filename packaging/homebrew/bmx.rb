@@ -9,7 +9,7 @@ class Bmx < Formula
   homepage "https://github.com/amkisko/bmx.rs"
   url "https://github.com/amkisko/bmx.rs/archive/refs/tags/v0.1.4.tar.gz"
   # Fill before release: shasum -a 256 <(curl -sL https://github.com/amkisko/bmx.rs/archive/refs/tags/vX.Y.Z.tar.gz)
-  sha256 ""
+  sha256 "31441ce5eb9cde38a5e6a3a61887eb5928f83a7df6b129e6562b068e282af938"
   license "MIT"
   head "https://github.com/amkisko/bmx.rs.git", branch: "main"
 
