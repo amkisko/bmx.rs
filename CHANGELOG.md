@@ -1,7 +1,8 @@
-# Changelog
+# CHANGELOG
 
 ## Unreleased
 
+- Shrink the release binary with thin LTO, symbol stripping, and a single codegen unit.
 - Contain `bmx.run` / executable paths under the install tree (reject absolute paths and `..`).
 - Sync OpenSSH public keys from trust policy into per-source `allowedSignersFile`; document fingerprint-only limitation.
 - Typed process exit codes (usage/trust/network/io) with `cli_error` hints; `bmx completions` and `bmx man`.
