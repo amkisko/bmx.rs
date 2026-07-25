@@ -7,7 +7,7 @@
 class Bmx < Formula
   desc "Command-line tool that installs, builds, and runs software from source repositories"
   homepage "https://github.com/amkisko/bmx.rs"
-  url "https://github.com/amkisko/bmx.rs/archive/refs/tags/v0.1.3.tar.gz"
+  url "https://github.com/amkisko/bmx.rs/archive/refs/tags/v0.1.4.tar.gz"
   # Fill before release: shasum -a 256 <(curl -sL https://github.com/amkisko/bmx.rs/archive/refs/tags/vX.Y.Z.tar.gz)
   sha256 ""
   license "MIT"

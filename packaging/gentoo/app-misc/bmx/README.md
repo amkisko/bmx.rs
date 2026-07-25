@@ -11,10 +11,10 @@ To use this ebuild in a local overlay:
 mkdir -p /usr/local/portage/app-misc/bmx
 
 # Copy the ebuild
-cp bmx-0.1.3.ebuild /usr/local/portage/app-misc/bmx/
+cp bmx-0.1.4.ebuild /usr/local/portage/app-misc/bmx/
 
 # Generate the manifest
-ebuild /usr/local/portage/app-misc/bmx/bmx-0.1.3.ebuild manifest
+ebuild /usr/local/portage/app-misc/bmx/bmx-0.1.4.ebuild manifest
 
 # Install
 emerge app-misc/bmx

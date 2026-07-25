@@ -14,7 +14,7 @@
       {
         packages.default = pkgs.rustPlatform.buildRustPackage {
           pname = "bmx";
-          version = "0.1.3";
+          version = "0.1.4";
           src = self;
           cargoLock.lockFile = self + "/Cargo.lock";
         };

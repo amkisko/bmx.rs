@@ -6,7 +6,7 @@
 
 PORTNAME=	bmx
 DISTVERSIONPREFIX=	v
-DISTVERSION=	0.1.3
+DISTVERSION=	0.1.4
 CATEGORIES=	sysutils
 MAINTAINER=	contact@kiskolabs.com
 COMMENT=	Command-line tool that installs, builds, and runs software from source repositories

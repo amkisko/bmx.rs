@@ -3,7 +3,7 @@
 # Submit to AUR and users install with: yay -S bmx
 
 pkgname=bmx
-pkgver=0.1.3
+pkgver=0.1.4
 pkgrel=1
 pkgdesc="Command-line tool that installs, builds, and runs software from source repositories"
 arch=('x86_64' 'aarch64' 'i686')
