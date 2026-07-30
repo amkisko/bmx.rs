@@ -1,23 +1,29 @@
-# Contributing
+# Contributing Guidelines
 
-Thank you for contributing to bmx.
+Thank you for your interest in contributing. We value learning over perfection but require rigor and responsibility.
 
-## Contribution Principles
+## The Golden Rule of Automation
 
-Contributions should be clear, testable, and scoped to one logical change. Each pull request should explain why the change is needed, what behavior changes, and how it was validated.
+We welcome the use of AI and automation tools to reduce toil, but you must strictly adhere to the following:
 
-Contributors are responsible for all submitted output, including chatbot-assisted output. Every change should be reviewed and understood before submission. Secrets, credentials, and private data must never be included in code, prompts, logs, or documentation.
+1. You are the Author: You act as the responsible agent for any code you submit. You must review, debug, and understand every line.
+2. Manage Cognitive Load: Do not submit massive, unreviewed automated dumps. Respect the reviewers' time by annotating complex logic.
+3. Security: Never feed project secrets or private context into public AI models.
 
-## Development Workflow
+## How to Contribute
 
-Before opening a pull request, run the standard checks locally:
+### 1. Reporting Issues
 
-- `cargo fmt --all -- --check`
-- `cargo clippy --all-targets -- -D warnings`
-- `cargo test`
+- Verify Accuracy: Before posting, verify your information. Avoid generalizations.
+- Use Structured Inputs: Use issue templates to provide clear goals, constraints, and reproduction steps. This helps us understand the context immediately.
 
-If any check fails, resolve the issue before submitting.
+### 2. Pull Request Process
 
-## Reporting Issues
+- Scope: Keep PRs focused on a single goal.
+- Context: Explain why the change is necessary. Transparency builds trust.
+- Testing: Run all smoke tests and regression checks locally. We prioritize safety first.
 
-Issue reports should be reproducible and specific. Include the expected behavior, the actual behavior, clear reproduction steps, and relevant environment details.
+### 3. Review Process
+
+- We encourage productive friction. Expect questions about your approach.
+- If a reviewer suggests a change, view it as mutual aid, not criticism.

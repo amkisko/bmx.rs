@@ -1,15 +1,29 @@
-# Governance
+# Project Governance
 
-This project aims for fast iteration with clear guardrails on safety and design. Day-to-day work should stay lightweight; the rules below exist so expectations stay obvious as more people touch the code.
+## Overview
+
+This project balances individual autonomy with collective coordination. We aim for a workflow that supports rapid iteration while maintaining strict guardrails for safety and architectural integrity.
 
 ## Roles
 
-Contributors are anyone who opens issues, sends pull requests, or discusses changes here. They are expected to follow the code of conduct and contributing guidelines, and to own the quality of what they submit—including material produced with automation.
+### Contributors
 
-Maintainers steer scope and architecture, review contributions for correctness and security, and help resolve disagreements when the right direction is not obvious.
+Anyone who submits code, documentation, or participates in discussions. Contributors are expected to exercise direct action: taking ownership of problems they identify, while adhering to our quality standards.
 
-## Decisions
+### Maintainers (Human Oversight)
 
-Routine changes can move on lazy consensus: if nobody objects within about two weeks, the proposal is treated as accepted for that class of change.
+Maintainers are responsible for:
 
-Larger shifts—architecture, risky automation, or behaviour that materially affects users—need explicit maintainer agreement before landing, not just silence. Prefer changes that solve a real problem over changes that only look polished.
+1. Strategic Judgment: Defining scope and architectural direction.
+2. Review: verifying that contributions (human or automated) meet security and logic standards.
+3. Consensus Building: Facilitating decisions when the community is divided.
+
+## Decision Making Process
+
+### Lazy Consensus
+
+For most routine changes, we operate on lazy consensus. If a proposal is made and no objections are raised within two weeks, it is considered approved.
+
+### Strategic Alignment
+
+Major architectural changes, high-risk automation integrations, or changes that affect business logic require explicit approval from the Maintainers. We prioritize substance over performance: a change must solve a real problem, not just appear polished.

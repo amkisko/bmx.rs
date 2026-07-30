@@ -1,15 +1,27 @@
-# Security Policy
+# SECURITY
 
-## Reporting Vulnerabilities
+## Reporting a Vulnerability
 
-Do not report vulnerabilities in public issues.
+Do not open a public issue for security vulnerabilities.
 
-Send security reports to [security@kiskolabs.com](mailto:security@kiskolabs.com) or use [GitHub private security advisories](https://github.com/amkisko/bmx.rs/security/advisories). A useful report includes a clear description of the issue, reproduction steps, impact assessment, and any known remediation ideas.
+Email security details to: security@kiskolabs.com
 
-## Disclosure Process
+Include: description, steps to reproduce, potential impact, and suggested fix (if available).
 
-We acknowledge receipt, investigate the report, and provide status updates during triage and remediation. Public disclosure is coordinated after a fix is available.
+### Response Timeline
 
-## Handling Sensitive Data
+- We will acknowledge receipt of your report
+- We will provide an initial assessment
+- We will keep you informed of our progress and resolution timeline
 
-Do not place production credentials, API keys, personal data, or other sensitive information in public artifacts or external chatbot tools. Dependency and supply-chain changes should be reviewed carefully before merge.
+### Disclosure Policy
+
+- We will work with you to understand and resolve the issue
+- We will credit you for the discovery (unless you prefer to remain anonymous)
+- We will publish a security advisory after the vulnerability is patched
+- We will coordinate public disclosure with you
+
+## Automation Security
+
+- Context Isolation: It is strictly forbidden to include production credentials, API keys, or Personally Identifiable Information (PII) in prompts sent to third-party LLMs or automation services.
+- Supply Chain: All automated dependencies must be verified.
