@@ -4,6 +4,8 @@
 
 Command-line tool that installs, builds, and runs software from source repositories. The usual shape is: you name an app or repo, bmx makes sure it is built and cached locally, then runs it. State lives under `~/.bmx` so everything stays on your machine.
 
+Design changes go through `rfcs/` (RFC 0001).
+
 For behaviour, commands, storage layout, and limits, see [SPEC.md](SPEC.md).
 
 ## Build and install
